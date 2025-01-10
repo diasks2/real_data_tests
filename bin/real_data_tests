@@ -1,0 +1,21 @@
+#!/usr/bin/env ruby
+
+require "thor"
+require "real_data_tests"
+
+module RealDataTests
+  class CLI < Thor
+    desc "create_dump MODEL_NAME ID [NAME]", "Create a dump file from a record"
+    def create_dump(model_name, id, name = nil)
+      require "./config/environment"
+
+      model = model_name.classify.constantize
+      record = model.find(id)
+
+      dump_path = RealDataTests.create_dump_file(record, name: name)
+      puts "Created dump file: #{dump_path}"
+    end
+  end
+end
+
+RealDataTests::CLI.start(ARGV)
