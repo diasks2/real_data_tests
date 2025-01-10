@@ -7,6 +7,10 @@ module RealDataTests
 
     def create_dump_file
       records = RecordCollector.new(@record).collect
+
+      # Anonymize records before creating dump
+      DataAnonymizer.new(records).anonymize_records
+
       dump_commands = PgDumpGenerator.new(records).generate
 
       dump_path = dump_file_path

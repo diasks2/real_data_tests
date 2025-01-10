@@ -41,6 +41,18 @@ RealDataTests.configure do |config|
 
   # Optionally exclude specific associations from being collected
   config.excluded_associations = [:very_large_association]
+
+  # Configure data anonymization
+  config.anonymize User, {
+    first_name: 'Faker::Name.first_name',
+    last_name: 'Faker::Name.last_name',
+    email: 'Faker::Internet.email'
+  }
+
+  config.anonymize Customer, {
+    phone_number: 'Faker::PhoneNumber.phone_number',
+    address: 'Faker::Address.street_address'
+  }
 end
 ```
 
@@ -97,6 +109,45 @@ RSpec.describe "Blog" do
   end
 end
 ```
+
+## Data Anonymization
+
+Real Data Tests integrates with the Faker gem to help you anonymize sensitive data before creating test dumps. This is particularly useful when working with production data that contains personal information.
+
+### Configuring Anonymization
+
+You can specify which fields should be anonymized and what Faker generators to use:
+
+```ruby
+RealDataTests.configure do |config|
+  # Anonymize User fields
+  config.anonymize User, {
+    first_name: 'Faker::Name.first_name',
+    last_name: 'Faker::Name.last_name',
+    email: 'Faker::Internet.email'
+  }
+
+  # Anonymize Customer fields
+  config.anonymize Customer, {
+    phone_number: 'Faker::PhoneNumber.phone_number',
+    address: 'Faker::Address.street_address'
+  }
+end
+```
+
+The anonymization happens automatically when creating dump files. The original data in your development/production database remains unchanged - only the exported test data is anonymized.
+
+### Available Faker Generators
+
+You can use any generator from the Faker gem. Some common examples:
+
+- Names: `Faker::Name.first_name`, `Faker::Name.last_name`
+- Internet: `Faker::Internet.email`, `Faker::Internet.username`
+- Addresses: `Faker::Address.street_address`, `Faker::Address.city`
+- Phone Numbers: `Faker::PhoneNumber.phone_number`
+- Companies: `Faker::Company.name`, `Faker::Company.industry`
+
+See the [Faker documentation](https://github.com/faker-ruby/faker) for a complete list of available generators.
 
 ## How It Works
 
