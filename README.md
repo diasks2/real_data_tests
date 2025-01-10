@@ -1,6 +1,8 @@
 # Real Data Tests
 
-Create realistic test data in your Rails applications by extracting real records and their associations from your development or production database.
+Create realistic test data in your Rails applications by extracting real records and their associations from your PostgreSQL database.
+
+> **Note**: This gem currently only supports PostgreSQL databases. MySQL and other database adapters are not supported.
 
 ## Why use Real Data Tests?
 
@@ -10,6 +12,13 @@ Real Data Tests solves this by:
 - Automatically analyzing and extracting real records and their associations
 - Creating reusable SQL dumps that can be committed to your repository
 - Making it easy to load realistic test data in your specs
+
+## Requirements
+
+- Rails 5.0 or higher
+- PostgreSQL database
+- `pg_dump` command-line utility installed and accessible
+- Database user needs sufficient permissions to run `pg_dump`
 
 ## Installation
 
