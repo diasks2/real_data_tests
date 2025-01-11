@@ -9,10 +9,9 @@ module RealDataTests
     end
 
     def generate
-      tables_with_records = @records.group_by { |record| record.class.table_name }
-
-      # Generate only INSERT statements
-      insert_statements = collect_inserts(tables_with_records)
+      # Sort records by their dependencies
+      sorted_records = sort_by_dependencies(@records)
+      insert_statements = collect_inserts(sorted_records)
 
       # Write all INSERT statements, no schema or grants
       insert_statements.join("\n")
@@ -20,32 +19,63 @@ module RealDataTests
 
     private
 
-    def collect_inserts(tables_with_records)
-      tables_with_records.map do |table_name, records|
-        ids = records.map { |r| quote_value(r.id) }.join(',')
-        temp_file = "#{Dir.tmpdir}/#{table_name}_#{Time.now.to_i}.sql"
+    def sort_by_dependencies(records)
+      # Group records by table
+      tables_with_records = records.group_by { |record| record.class }
 
-        # Get the column names for this table
-        columns = records.first.class.column_names
-
-        # Use COPY to extract the data
-        copy_command = "\\COPY (SELECT * FROM #{table_name} WHERE id IN (#{ids})) TO '#{temp_file}' WITH CSV"
-        system("psql #{connection_options} -c \"#{copy_command}\"")
-
-        # Read the data and create INSERT statements
-        data = File.read(temp_file)
-        statements = data.split("\n").map do |line|
-          values = CSV.parse_line(line).map { |val| quote_value(val) }.join(',')
-          "INSERT INTO #{table_name} (#{columns.join(', ')}) " \
-          "VALUES (#{values}) " \
-          "ON CONFLICT (id) DO NOTHING;"
+      # Build dependency graph
+      dependencies = {}
+      tables_with_records.keys.each do |model|
+        dependencies[model] = model.reflect_on_all_associations(:belongs_to).map do |assoc|
+          assoc.klass
         end
+      end
 
-        # Clean up temp file
-        FileUtils.rm(temp_file)
+      # Topologically sort models based on dependencies
+      sorted_models = topological_sort(dependencies)
 
-        statements
-      end.flatten
+      # Return records in sorted order
+      sorted_models.flat_map do |model|
+        tables_with_records[model] || []
+      end
+    end
+
+    def topological_sort(dependencies)
+      sorted = []
+      visited = Set.new
+      temporary = Set.new
+
+      dependencies.keys.each do |model|
+        visit_model(model, dependencies, sorted, visited, temporary)
+      end
+
+      sorted.reverse
+    end
+
+    def visit_model(model, dependencies, sorted, visited, temporary)
+      return if visited.include?(model)
+      raise "Circular dependency detected" if temporary.include?(model)
+
+      temporary.add(model)
+
+      dependencies[model].each do |dependency|
+        visit_model(dependency, dependencies, sorted, visited, temporary)
+      end
+
+      temporary.delete(model)
+      visited.add(model)
+      sorted << model
+    end
+
+    def collect_inserts(records)
+      records.map do |record|
+        columns = record.class.column_names
+        values = columns.map { |col| quote_value(record.send(col)) }
+
+        "INSERT INTO #{record.class.table_name} (#{columns.join(', ')}) " \
+        "VALUES (#{values.join(', ')}) " \
+        "ON CONFLICT (id) DO NOTHING;"
+      end
     end
 
     def quote_value(value)
