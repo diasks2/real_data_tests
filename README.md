@@ -146,6 +146,28 @@ end
 
 The anonymization happens automatically when creating dump files. The original data in your development/production database remains unchanged - only the exported test data is anonymized.
 
+## Association Filtering
+
+Real Data Tests provides two mutually exclusive approaches to control which associations are collected:
+
+### Blacklist Mode
+Use this when you want to collect all associations EXCEPT specific ones:
+```ruby
+RealDataTests.configure do |config|
+  config.exclude_associations :comments, :notifications, :very_large_association
+end
+```
+
+### Whitelist Mode
+Use this when you want to ONLY collect specific associations:
+```ruby
+RealDataTests.configure do |config|
+  config.include_associations :posts, :profile, :avatar
+end
+```
+
+> **Note**: You must choose either blacklist or whitelist mode, not both. Attempting to use both will raise an error.
+
 ### Available Faker Generators
 
 You can use any generator from the Faker gem. Some common examples:

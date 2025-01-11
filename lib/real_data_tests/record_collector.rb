@@ -8,8 +8,11 @@ module RealDataTests
 
     def collect
       puts "\nStarting record collection from: #{@record.class.name}##{@record.id}"
-      collect_record(@record)
+      filter_mode = RealDataTests.configuration.association_filter_mode
+      filter_list = RealDataTests.configuration.association_filter_list
+      puts "Using #{filter_mode || 'no'} filter with #{filter_list.any? ? filter_list.join(', ') : 'no associations'}"
 
+      collect_record(@record)
       print_collection_stats
       @collected_records.to_a
     end
@@ -31,8 +34,10 @@ module RealDataTests
       puts "Found #{associations.length} associations"
 
       associations.each do |association|
-        if RealDataTests.configuration.excluded_associations.include?(association.name)
-          puts "  Skipping excluded association: #{association.name}"
+        should_process = RealDataTests.configuration.should_process_association?(association.name)
+
+        unless should_process
+          puts "  Skipping #{RealDataTests.configuration.association_filter_mode == :whitelist ? 'non-whitelisted' : 'blacklisted'} association: #{association.name}"
           next
         end
 
