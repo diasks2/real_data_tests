@@ -12,7 +12,6 @@ module RealDataTests
           # Load the SQL dump quietly
           result = system("psql #{connection_options} -q < #{dump_path}")
           raise Error, "Failed to load test data: #{dump_path}" unless result
-
         ensure
           # Re-enable foreign key checks
           ActiveRecord::Base.connection.execute('SET session_replication_role = DEFAULT;')
@@ -35,36 +34,40 @@ module RealDataTests
         model = table.classify.safe_constantize
         next unless model
 
-        dependencies[table] = model.reflect_on_all_associations(:belongs_to).map do |assoc|
+        foreign_keys = model.reflect_on_all_associations(:belongs_to).reject(&:polymorphic?).map do |assoc|
           assoc.klass.table_name
         end
+
+        dependencies[table] = foreign_keys
       end
 
-      # Set DatabaseCleaner deletion order
-      sorted_tables = topological_sort(dependencies).reverse
-      DatabaseCleaner.clean_with(:deletion, only: sorted_tables)
+      # Set up deletion order based on dependencies
+      deletion_order = reverse_topological_sort(dependencies)
+
+      # Configure DatabaseCleaner strategy
+      DatabaseCleaner.strategy = :deletion, { delete_order: deletion_order }
     end
 
-    def topological_sort(dependencies)
+    def reverse_topological_sort(dependencies)
       sorted = []
       visited = Set.new
       temporary = Set.new
 
-      dependencies.keys.each do |table|
-        visit_node(table, dependencies, sorted, visited, temporary)
+      dependencies.keys.each do |node|
+        visit_node(node, dependencies, sorted, visited, temporary) unless visited.include?(node)
       end
 
-      sorted
+      sorted.reverse
     end
 
     def visit_node(node, dependencies, sorted, visited, temporary)
-      return if visited.include?(node)
       raise "Circular dependency detected" if temporary.include?(node)
-
       temporary.add(node)
 
       (dependencies[node] || []).each do |dependency|
-        visit_node(dependency, dependencies, sorted, visited, temporary)
+        unless visited.include?(dependency)
+          visit_node(dependency, dependencies, sorted, visited, temporary)
+        end
       end
 
       temporary.delete(node)
@@ -84,7 +87,6 @@ module RealDataTests
       options << "-p #{config[:port]}" if config[:port]
       options << "-U #{config[:username]}" if config[:username]
       options << "-d #{config[:database]}"
-      # Add quiet flag to suppress INSERT messages
       options << "-q"
       options.join(" ")
     end

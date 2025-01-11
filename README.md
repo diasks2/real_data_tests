@@ -180,6 +180,39 @@ You can use any generator from the Faker gem. Some common examples:
 
 See the [Faker documentation](https://github.com/faker-ruby/faker) for a complete list of available generators.
 
+## Database Cleaner Integration
+
+If you're using DatabaseCleaner with models that have foreign key constraints, you'll need to handle the cleanup order carefully. Here are two approaches:
+
+### Option 1: Disable Foreign Key Constraints During Cleanup
+Add this to your DatabaseCleaner configuration:
+
+```ruby
+config.append_after(:suite) do
+  # Disable foreign key constraints
+  ActiveRecord::Base.connection.execute('SET session_replication_role = replica;')
+  begin
+    # Your cleanup code here
+    SKIP_MODELS.each { |model| model.delete_all }
+  ensure
+    # Re-enable foreign key constraints
+    ActiveRecord::Base.connection.execute('SET session_replication_role = DEFAULT;')
+  end
+end
+```
+
+### Option 2: Use Deletion Strategy with Proper Order
+If you prefer to maintain referential integrity during cleanup:
+
+```ruby
+config.append_after(:suite) do
+  # Delete records in reverse dependency order
+  [Patient, Organization, PatientStatus].reverse.each(&:delete_all)
+end
+```
+
+> **Note**: Replace the model list with your actual models in the correct dependency order.
+
 ## How It Works
 
 1. **Record Collection**: The gem analyzes your ActiveRecord associations to find all related records.

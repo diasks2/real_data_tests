@@ -1,6 +1,6 @@
 module RealDataTests
   class Configuration
-    attr_accessor :dump_path, :anonymization_rules
+    attr_accessor :dump_path, :anonymization_rules, :cleanup_models
     attr_reader :association_filter_mode, :association_filter_list
 
     def initialize
@@ -8,6 +8,7 @@ module RealDataTests
       @anonymization_rules = {}
       @association_filter_mode = nil
       @association_filter_list = []
+      @cleanup_models = []
     end
 
     # Set associations to exclude (blacklist mode)
@@ -15,6 +16,11 @@ module RealDataTests
       raise Error, "Cannot set excluded_associations when included_associations is already set" if @association_filter_mode == :whitelist
       @association_filter_mode = :blacklist
       @association_filter_list = associations.flatten
+    end
+
+    # Add a method for configuring cleanup
+    def configure_cleanup(*models)
+      @cleanup_models = models.flatten
     end
 
     # Set associations to include (whitelist mode)
