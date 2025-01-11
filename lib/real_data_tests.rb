@@ -5,6 +5,7 @@ require 'real_data_tests/configuration'
 require 'real_data_tests/record_collector'
 require 'real_data_tests/pg_dump_generator'
 require 'real_data_tests/test_data_builder'
+require 'real_data_tests/data_anonymizer'
 require 'real_data_tests/rspec_helper'
 
 module RealDataTests

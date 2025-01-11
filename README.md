@@ -154,7 +154,7 @@ Real Data Tests provides two mutually exclusive approaches to control which asso
 Use this when you want to collect all associations EXCEPT specific ones:
 ```ruby
 RealDataTests.configure do |config|
-  config.exclude_associations :comments, :notifications, :very_large_association
+  config.exclude_associations :comment, :notification, :large_association
 end
 ```
 
@@ -162,7 +162,7 @@ end
 Use this when you want to ONLY collect specific associations:
 ```ruby
 RealDataTests.configure do |config|
-  config.include_associations :posts, :profile, :avatar
+  config.include_associations :post, :profile, :avatar
 end
 ```
 
