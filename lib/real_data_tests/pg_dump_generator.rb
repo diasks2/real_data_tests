@@ -103,14 +103,12 @@ module RealDataTests
         table_name = record.class.table_name
         columns = record.class.column_names
 
-        # Get the actual database values for each column
         values = columns.map do |column|
           if record.class.respond_to?(:defined_enums) && record.class.defined_enums.key?(column)
-            # Get the raw database value for the enum
             raw_value = record.read_attribute_before_type_cast(column)
             raw_value.nil? ? 'NULL' : raw_value.to_s
           else
-            quote_value(record[column], get_column_type(record.class, column))
+            quote_value(record[column], get_column_info(record.class, column))
           end
         end
 
@@ -123,33 +121,44 @@ module RealDataTests
       end
     end
 
-    def get_column_type(model, column_name)
-      model.columns_hash[column_name].type
+    def get_column_info(model, column_name)
+      column = model.columns_hash[column_name]
+      {
+        type: column.type,
+        sql_type: column.sql_type,
+        array: column.array
+      }
     end
 
-    def quote_value(value, column_type)
+    def quote_value(value, column_info)
       return 'NULL' if value.nil?
 
-      case column_type
+      case column_info[:type]
       when :integer, :decimal, :float
         value.to_s
       when :boolean
         value.to_s
       when :array
-        array_value = value.is_a?(String) ? JSON.parse(value) : value
-        format_array(array_value)
+        format_array(value, column_info)
       when :json, :jsonb
         json_value = value.is_a?(String) ? value : value.to_json
         sanitize_string(json_value)
       else
-        sanitize_string(value.to_s)
+        if column_info[:array]
+          format_array(value, column_info)
+        else
+          sanitize_string(value.to_s)
+        end
       end
     end
 
-    def format_array(array)
-      return "ARRAY[]::integer[]" if array.empty?
+    def format_array(value, column_info)
+      array_value = value.is_a?(String) ? JSON.parse(value) : value
+      base_type = extract_base_type(column_info[:sql_type])
 
-      elements = array.map do |element|
+      return "'{}'::#{column_info[:sql_type]}" if array_value.empty?
+
+      elements = array_value.map do |element|
         case element
         when String
           sanitize_string(element)
@@ -162,7 +171,12 @@ module RealDataTests
         end
       end
 
-      "ARRAY[#{elements.join(',')}]"
+      "ARRAY[#{elements.join(',')}]::#{column_info[:sql_type]}"
+    end
+
+    def extract_base_type(sql_type)
+      # Extracts the base type from array types like "integer[]" or "character varying[]"
+      sql_type.sub(/\[\]$/, '')
     end
 
     def sanitize_string(str)
