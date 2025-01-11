@@ -11,17 +11,17 @@ module RealDataTests
       # Only anonymize if rules are configured
       if RealDataTests.configuration.anonymization_rules.any?
         puts "\nAnonymizing records..."
-        RealDataTests::DataAnonymizer.new(records).anonymize_records
+        anonymizer = RealDataTests::DataAnonymizer.new(RealDataTests.configuration)
+        anonymizer.anonymize_records(records)
       end
 
       dump_content = RealDataTests::PgDumpGenerator.new(records).generate
-
       dump_path = dump_file_path
-      FileUtils.mkdir_p(File.dirname(dump_path))
 
-      # Write the SQL content to file
+      FileUtils.mkdir_p(File.dirname(dump_path))
       File.write(dump_path, dump_content)
 
+      puts "\nDump file created at: #{dump_path}"
       dump_path
     end
 
