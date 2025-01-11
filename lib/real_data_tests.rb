@@ -7,6 +7,7 @@ require 'real_data_tests/record_collector'
 require 'real_data_tests/rspec_helper'
 require 'real_data_tests/test_data_builder'
 require 'real_data_tests/version'
+require 'real_data_tests/railtie' if defined?(Rails)
 
 module RealDataTests
   class Error < StandardError; end

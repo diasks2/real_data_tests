@@ -50,18 +50,22 @@ RealDataTests.configure do |config|
 
   # Optionally exclude specific associations from being collected
   config.excluded_associations = [:very_large_association]
+end
 
-  # Configure data anonymization
-  config.anonymize 'User', {
-    first_name: 'Faker::Name.first_name',
-    last_name: 'Faker::Name.last_name',
-    email: 'Faker::Internet.email'
-  }
+Rails.application.config.after_initialize do
+  RealDataTests.configure do |config|
+    # Configure data anonymization
+    config.anonymize 'User', {
+      first_name: 'Faker::Name.first_name',
+      last_name: 'Faker::Name.last_name',
+      email: 'Faker::Internet.email'
+    }
 
-  config.anonymize 'Customer', {
-    phone_number: 'Faker::PhoneNumber.phone_number',
-    address: 'Faker::Address.street_address'
-  }
+    config.anonymize 'Customer', {
+      phone_number: 'Faker::PhoneNumber.phone_number',
+      address: 'Faker::Address.street_address'
+    }
+  end
 end
 ```
 
