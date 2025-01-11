@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-require 'real_data_tests/version'
 require 'real_data_tests/configuration'
-require 'real_data_tests/record_collector'
-require 'real_data_tests/pg_dump_generator'
-require 'real_data_tests/test_data_builder'
 require 'real_data_tests/data_anonymizer'
+require 'real_data_tests/pg_dump_generator'
+require 'real_data_tests/record_collector'
 require 'real_data_tests/rspec_helper'
+require 'real_data_tests/test_data_builder'
+require 'real_data_tests/version'
 
 module RealDataTests
   class Error < StandardError; end

@@ -6,15 +6,15 @@ module RealDataTests
     end
 
     def create_dump_file
-      records = RecordCollector.new(@record).collect
+      records = RealDataTests::RecordCollector.new(@record).collect
 
       # Only anonymize if rules are configured
       if RealDataTests.configuration.anonymization_rules.any?
         puts "\nAnonymizing records..."
-        DataAnonymizer.new(records).anonymize_records
+        RealDataTests::DataAnonymizer.new(records).anonymize_records
       end
 
-      dump_commands = PgDumpGenerator.new(records).generate
+      dump_commands = RealDataTests::PgDumpGenerator.new(records).generate
 
       dump_path = dump_file_path
       FileUtils.mkdir_p(File.dirname(dump_path))
