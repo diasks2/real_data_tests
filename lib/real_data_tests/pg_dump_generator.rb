@@ -62,7 +62,7 @@ module RealDataTests
         visit_model(model, dependencies, sorted, visited, temporary) unless visited.include?(model)
       end
 
-      sorted.reverse
+      sorted
     end
 
     def visit_model(model, dependencies, sorted, visited, temporary)
