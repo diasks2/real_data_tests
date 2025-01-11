@@ -45,33 +45,35 @@ Create an initializer in your Rails application:
 
 ```ruby
 # config/initializers/real_data_tests.rb
-RealDataTests.configure do |config|
-  # Directory where SQL dumps will be stored
-  config.dump_path = 'spec/fixtures/real_data_dumps'
+Rails.application.config.after_initialize do
+  RealDataTests.configure do |config|
+    # Directory where SQL dumps will be stored
+    config.dump_path = 'spec/fixtures/real_data_dumps'
 
-  # Configure which associations to include (whitelist mode)
-  config.include_associations(
-    :user,
-    :profile,
-    :posts,
-    :comments
-  )
+    # Configure which associations to include (whitelist mode)
+    config.include_associations(
+      :user,
+      :profile,
+      :posts,
+      :comments
+    )
 
-  # Or exclude specific associations (blacklist mode)
-  # config.exclude_associations(:very_large_association)
+    # Or exclude specific associations (blacklist mode)
+    # config.exclude_associations(:very_large_association)
 
-  # Configure data anonymization with proper lambda syntax
-  config.anonymize 'User', {
-    first_name: -> (_) { Faker::Name.first_name },
-    last_name:  -> (_) { Faker::Name.last_name },
-    email:      -> (user) { Faker::Internet.email(name: "user#{user.id}") }
-  }
+    # Configure data anonymization with proper lambda syntax
+    config.anonymize 'User', {
+      first_name: -> (_) { Faker::Name.first_name },
+      last_name:  -> (_) { Faker::Name.last_name },
+      email:      -> (user) { Faker::Internet.email(name: "user#{user.id}") }
+    }
 
-  config.anonymize 'Patient', {
-    first_name: -> (_) { Faker::Name.first_name },
-    last_name:  -> (_) { Faker::Name.last_name },
-    phone:      -> (_) { Faker::PhoneNumber.phone_number }
-  }
+    config.anonymize 'Patient', {
+      first_name: -> (_) { Faker::Name.first_name },
+      last_name:  -> (_) { Faker::Name.last_name },
+      phone:      -> (_) { Faker::PhoneNumber.phone_number }
+    }
+  end
 end
 ```
 
