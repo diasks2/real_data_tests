@@ -61,7 +61,11 @@ Rails.application.config.after_initialize do
     # Or exclude specific associations (blacklist mode)
     # config.exclude_associations(:very_large_association)
 
-    # Configure data anonymization with proper lambda syntax
+    # Control association loading behavior
+    config.limit_association 'Patient.visit_notes', 10
+    config.prevent_reciprocal 'VisitNoteType.visit_notes'
+
+    # Configure data anonymization
     config.anonymize 'User', {
       first_name: -> (_) { Faker::Name.first_name },
       last_name:  -> (_) { Faker::Name.last_name },
@@ -131,6 +135,50 @@ RSpec.describe "Blog" do
   end
 end
 ```
+
+## Association Loading Control
+
+Real Data Tests provides fine-grained control over how associations are loaded. This is particularly useful for managing large datasets and preventing circular references.
+
+### Limiting Association Records
+
+You can limit the number of records loaded for specific has_many associations:
+
+```ruby
+RealDataTests.configure do |config|
+  # Limit Patient.visit_notes to only load the 10 most recent records
+  config.limit_association 'Patient.visit_notes', 10
+
+  # Limit Organization.employees to 100 records
+  config.limit_association 'Organization.employees', 100
+end
+```
+
+### Preventing Reciprocal Loading
+
+For associations that reference each other, you can prevent circular loading:
+
+```ruby
+RealDataTests.configure do |config|
+  # Prevent VisitNoteType from loading all associated visit_notes
+  config.prevent_reciprocal 'VisitNoteType.visit_notes'
+
+  # Prevent Department from loading all employees when an employee is loaded
+  config.prevent_reciprocal 'Department.employees'
+end
+```
+
+This is particularly useful when:
+- You want to load a record's associations but not their reciprocal associations
+- You need to prevent circular references in complex association chains
+- You want to control the depth of association loading
+
+### Best Practices for Association Loading
+
+1. **Identify Circular References**: Look for models that reference each other and use `prevent_reciprocal` to break the circle.
+2. **Control Data Volume**: Use `limit_association` for has_many relationships that could return large numbers of records.
+3. **Consider Load Order**: When using both features, think about which associations should be limited vs prevented.
+4. **Monitor Performance**: Watch the size of your dump files and adjust limits as needed.
 
 ## Association Filtering
 

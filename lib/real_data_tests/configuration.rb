@@ -2,7 +2,8 @@
 module RealDataTests
   class Configuration
     attr_accessor :dump_path, :cleanup_models
-    attr_reader :association_filter_mode, :association_filter_list, :anonymization_rules
+    attr_reader :association_filter_mode, :association_filter_list,
+                :association_limits, :prevent_reciprocal_loading
 
     def initialize
       @dump_path = 'spec/fixtures/real_data_dumps'
@@ -11,6 +12,8 @@ module RealDataTests
       @association_filter_list = []
       @cleanup_models = []
       @delayed_anonymizations = []
+      @association_limits = {}
+      @prevent_reciprocal_loading = {}
     end
 
     def anonymize(model_name, mappings = {})
@@ -69,6 +72,30 @@ module RealDataTests
       else
         true
       end
+    end
+
+    # Configure limits for specific associations
+    # Example: limit_association 'Patient.visit_notes', 10
+    def limit_association(path, limit)
+      @association_limits[path.to_s] = limit
+    end
+
+    # Prevent loading reciprocal associations
+    # Example: prevent_reciprocal 'VisitNoteType.visit_notes'
+    def prevent_reciprocal(path)
+      @prevent_reciprocal_loading[path.to_s] = true
+    end
+
+    # Get limit for a specific association
+    def get_association_limit(record_class, association_name)
+      path = "#{record_class.name}.#{association_name}"
+      @association_limits[path]
+    end
+
+    # Check if reciprocal loading should be prevented
+    def prevent_reciprocal?(record_class, association_name)
+      path = "#{record_class.name}.#{association_name}"
+      @prevent_reciprocal_loading[path]
     end
   end
 

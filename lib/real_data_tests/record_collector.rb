@@ -4,7 +4,8 @@ module RealDataTests
       @record = record
       @collected_records = Set.new
       @collection_stats = Hash.new { |h, k| h[k] = { count: 0, associations: Hash.new(0) } }
-      @processed_associations = Set.new # Track processed association pairs to prevent cycles
+      @processed_associations = Set.new
+      @association_path = []
     end
 
     def collect
@@ -18,6 +19,22 @@ module RealDataTests
     end
 
     private
+
+    def should_process_association?(record, association)
+      association_key = "#{record.class.name}##{record.id}:#{association.name}"
+      return false if @processed_associations.include?(association_key)
+      @processed_associations.add(association_key)
+
+      return false unless RealDataTests.configuration.should_process_association?(association.name)
+
+      # Check for prevented reciprocal loading
+      if RealDataTests.configuration.prevent_reciprocal?(record.class, association.name)
+        puts "  Skipping prevented reciprocal association: #{association.name} on #{record.class.name}"
+        return false
+      end
+
+      true
+    end
 
     def collect_record(record)
       return if @collected_records.include?(record)
@@ -66,8 +83,14 @@ module RealDataTests
       when :belongs_to, :has_one
         Array(record.public_send(association.name)).compact
       when :has_many, :has_and_belongs_to_many
-        # Force load the association to ensure we get all records
         relation = record.public_send(association.name)
+
+        # Apply configured limit if it exists
+        if limit = RealDataTests.configuration.get_association_limit(record.class, association.name)
+          puts "  Applying configured limit of #{limit} records for #{record.class.name}.#{association.name}"
+          relation = relation.limit(limit)
+        end
+
         relation.loaded? ? relation.to_a : relation.load.to_a
       else
         []
