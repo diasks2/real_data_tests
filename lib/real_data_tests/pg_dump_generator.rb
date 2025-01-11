@@ -20,15 +20,16 @@ module RealDataTests
     private
 
     def sort_by_dependencies(records)
-      # Group records by table
-      tables_with_records = records.group_by { |record| record.class }
+      # Group records by model class
+      tables_with_records = records.group_by(&:class)
 
       # Build dependency graph
       dependencies = {}
-      tables_with_records.keys.each do |model|
-        dependencies[model] = model.reflect_on_all_associations(:belongs_to).map do |assoc|
-          assoc.klass
-        end
+      tables_with_records.each_key do |model|
+        dependencies[model] = model.reflect_on_all_associations(:belongs_to)
+          .reject(&:polymorphic?) # Skip polymorphic associations
+          .map(&:klass)
+          .uniq
       end
 
       # Topologically sort models based on dependencies
@@ -45,8 +46,8 @@ module RealDataTests
       visited = Set.new
       temporary = Set.new
 
-      dependencies.keys.each do |model|
-        visit_model(model, dependencies, sorted, visited, temporary)
+      dependencies.each_key do |model|
+        visit_model(model, dependencies, sorted, visited, temporary) unless visited.include?(model)
       end
 
       sorted.reverse
@@ -58,8 +59,8 @@ module RealDataTests
 
       temporary.add(model)
 
-      dependencies[model].each do |dependency|
-        visit_model(dependency, dependencies, sorted, visited, temporary)
+      (dependencies[model] || []).each do |dependency|
+        visit_model(dependency, dependencies, sorted, visited, temporary) unless visited.include?(dependency)
       end
 
       temporary.delete(model)
@@ -96,6 +97,7 @@ module RealDataTests
       options << "-p #{config[:port]}" if config[:port]
       options << "-U #{config[:username]}" if config[:username]
       options << "-d #{config[:database]}"
+      options << "-q"
       options.join(" ")
     end
   end
