@@ -4,17 +4,19 @@ module RealDataTests
       dump_path = File.join(RealDataTests.configuration.dump_path, "#{name}.sql")
       raise Error, "Test data file not found: #{dump_path}" unless File.exist?(dump_path)
 
-      # First, disable foreign key constraints
-      ActiveRecord::Base.connection.execute('SET CONSTRAINTS ALL DEFERRED;')
+      ActiveRecord::Base.transaction do
+        # Temporarily disable all foreign key constraints
+        ActiveRecord::Base.connection.execute('SET session_replication_role = replica;')
 
-      # Load the SQL dump
-      result = system("psql #{connection_options} < #{dump_path}")
+        begin
+          # Load the SQL dump (only contains INSERT statements now)
+          result = system("psql #{connection_options} < #{dump_path}")
+          raise Error, "Failed to load test data: #{dump_path}" unless result
 
-      # Re-enable foreign key constraints
-      ActiveRecord::Base.connection.execute('SET CONSTRAINTS ALL IMMEDIATE;')
-
-      unless result
-        raise Error, "Failed to load test data: #{dump_path}"
+        ensure
+          # Re-enable foreign key constraints
+          ActiveRecord::Base.connection.execute('SET session_replication_role = DEFAULT;')
+        end
       end
     end
 

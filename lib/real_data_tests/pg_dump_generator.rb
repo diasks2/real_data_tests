@@ -9,49 +9,43 @@ module RealDataTests
     end
 
     def generate
-      tables_with_records = order_by_dependencies(
-        @records.group_by { |record| record.class.table_name }
-      )
+      tables_with_records = @records.group_by { |record| record.class.table_name }
 
-      tables_with_records.map do |table_name, records|
-        ids = records.map { |r| quote_value(r.id) }.join(',')
-        temp_file = "#{Dir.tmpdir}/#{table_name}_#{Time.now.to_i}.sql"
+      # Generate only INSERT statements
+      insert_statements = collect_inserts(tables_with_records)
 
-        # Use psql to export just the INSERT statements for the records we want
-        system("psql #{connection_options} -c \"\\COPY (SELECT * FROM #{table_name} WHERE id IN (#{ids})) TO '#{temp_file}' WITH CSV\"")
-
-        data = File.read(temp_file)
-
-        # Convert CSV to INSERT statements
-        insert_statements = data.split("\n").map do |line|
-          values = CSV.parse_line(line).map { |val| quote_value(val) }.join(',')
-          "INSERT INTO #{table_name} VALUES (#{values}) ON CONFLICT (id) DO NOTHING;"
-        end.join("\n")
-
-        # Clean up temp file
-        FileUtils.rm(temp_file)
-
-        insert_statements
-      end.join("\n\n")
+      # Write all INSERT statements, no schema or grants
+      insert_statements.join("\n")
     end
 
     private
 
-    def order_by_dependencies(tables_with_records)
-      # Get all models
-      models = tables_with_records.keys.map { |table_name|
-        table_name.classify.constantize
-      }
+    def collect_inserts(tables_with_records)
+      tables_with_records.map do |table_name, records|
+        ids = records.map { |r| quote_value(r.id) }.join(',')
+        temp_file = "#{Dir.tmpdir}/#{table_name}_#{Time.now.to_i}.sql"
 
-      # Sort based on foreign key dependencies
-      sorted_models = models.sort_by do |model|
-        model.reflect_on_all_associations(:belongs_to).count
-      end
+        # Get the column names for this table
+        columns = records.first.class.column_names
 
-      # Reconstruct the hash in sorted order
-      sorted_models.map { |model|
-        [model.table_name, tables_with_records[model.table_name]]
-      }.to_h
+        # Use COPY to extract the data
+        copy_command = "\\COPY (SELECT * FROM #{table_name} WHERE id IN (#{ids})) TO '#{temp_file}' WITH CSV"
+        system("psql #{connection_options} -c \"#{copy_command}\"")
+
+        # Read the data and create INSERT statements
+        data = File.read(temp_file)
+        statements = data.split("\n").map do |line|
+          values = CSV.parse_line(line).map { |val| quote_value(val) }.join(',')
+          "INSERT INTO #{table_name} (#{columns.join(', ')}) " \
+          "VALUES (#{values}) " \
+          "ON CONFLICT (id) DO NOTHING;"
+        end
+
+        # Clean up temp file
+        FileUtils.rm(temp_file)
+
+        statements
+      end.flatten
     end
 
     def quote_value(value)
