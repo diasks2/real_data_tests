@@ -29,12 +29,13 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
+  spec.add_dependency "rails", ">= 5.0"
   spec.add_dependency "activerecord", ">= 5.0"
   spec.add_dependency "thor", "~> 1.0"
   spec.add_dependency "pg", ">= 1.1"
-
   spec.add_development_dependency "rake", "~> 13.0"
   spec.add_development_dependency "rspec", "~> 3.0"
   spec.add_development_dependency "database_cleaner", "~> 2.0"
   spec.add_dependency "faker", "~> 3.0"
+
 end

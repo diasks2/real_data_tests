@@ -1,18 +1,5 @@
+# lib/real_data_tests/configuration.rb
 module RealDataTests
-  class << self
-    def configuration
-      @configuration ||= Configuration.new
-    end
-
-    def configure
-      yield(configuration) if block_given?
-    end
-
-    def reset_configuration!
-      @configuration = Configuration.new
-    end
-  end
-
   class Configuration
     attr_accessor :dump_path, :cleanup_models
     attr_reader :association_filter_mode, :association_filter_list, :anonymization_rules
@@ -27,9 +14,11 @@ module RealDataTests
     end
 
     def anonymize(model_name, mappings = {})
-      if !defined?(Rails) || !Rails.application.initialized?
-        @delayed_anonymizations << [model_name, mappings]
-        return
+      if defined?(::Rails::Engine)
+        unless ::Rails::Engine.subclasses.map(&:name).include?('RealDataTests::Engine')
+          @delayed_anonymizations << [model_name, mappings]
+          return
+        end
       end
 
       begin
@@ -84,20 +73,4 @@ module RealDataTests
   end
 
   class Error < StandardError; end
-
-  class Railtie < Rails::Railtie
-    config.before_configuration do
-      # Ensure configuration is initialized before Rails configuration
-      RealDataTests.configuration
-    end
-
-    config.after_initialize do
-      if RealDataTests.configuration
-        RealDataTests.configuration.process_delayed_anonymizations
-      end
-    end
-  end
 end
-
-# Initialize configuration on require
-RealDataTests.configuration
