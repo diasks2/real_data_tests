@@ -9,46 +9,50 @@ module RealDataTests
     end
 
     def generate
-      tables_with_records = @records.group_by { |record| record.class.table_name }
+      tables_with_records = order_by_dependencies(
+        @records.group_by { |record| record.class.table_name }
+      )
 
-      # Create a temporary file for each table's copy command
-      temp_files = tables_with_records.map do |table_name, records|
+      tables_with_records.map do |table_name, records|
         ids = records.map { |r| quote_value(r.id) }.join(',')
         temp_file = "#{Dir.tmpdir}/#{table_name}_#{Time.now.to_i}.sql"
 
-        # Use psql to export just the records we want
+        # Use psql to export just the INSERT statements for the records we want
         system("psql #{connection_options} -c \"\\COPY (SELECT * FROM #{table_name} WHERE id IN (#{ids})) TO '#{temp_file}' WITH CSV\"")
 
-        # Now use pg_dump to create proper INSERT statements
-        command = "pg_dump #{connection_options} --table=#{table_name} --schema-only --no-owner | grep -v '^--' | grep -v '^SET' | grep -v '^SELECT' > #{temp_file}.schema"
-        system(command)
-
-        { table: table_name, data: temp_file, schema: "#{temp_file}.schema" }
-      end
-
-      # Combine all the files
-      result = temp_files.map do |file|
-        # Get the schema (INSERT statement structure)
-        schema = File.read(file[:schema])
-        data = File.read(file[:data])
+        data = File.read(temp_file)
 
         # Convert CSV to INSERT statements
         insert_statements = data.split("\n").map do |line|
           values = CSV.parse_line(line).map { |val| quote_value(val) }.join(',')
-          "INSERT INTO #{file[:table]} VALUES (#{values});"
+          "INSERT INTO #{table_name} VALUES (#{values}) ON CONFLICT (id) DO NOTHING;"
         end.join("\n")
 
-        # Clean up temp files
-        FileUtils.rm(file[:data])
-        FileUtils.rm(file[:schema])
+        # Clean up temp file
+        FileUtils.rm(temp_file)
 
-        schema + "\n" + insert_statements
+        insert_statements
       end.join("\n\n")
-
-      result
     end
 
     private
+
+    def order_by_dependencies(tables_with_records)
+      # Get all models
+      models = tables_with_records.keys.map { |table_name|
+        table_name.classify.constantize
+      }
+
+      # Sort based on foreign key dependencies
+      sorted_models = models.sort_by do |model|
+        model.reflect_on_all_associations(:belongs_to).count
+      end
+
+      # Reconstruct the hash in sorted order
+      sorted_models.map { |model|
+        [model.table_name, tables_with_records[model.table_name]]
+      }.to_h
+    end
 
     def quote_value(value)
       return 'NULL' if value.nil?
