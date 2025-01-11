@@ -138,17 +138,82 @@ module RealDataTests
         value.to_s
       when :boolean
         value.to_s
-      when :array
-        format_array(value, column_info)
-      when :json, :jsonb
-        json_value = value.is_a?(String) ? value : value.to_json
-        sanitize_string(json_value)
+      when :array, :json, :jsonb
+        parse_and_format_special_type(value, column_info)
       else
         if column_info[:array]
-          format_array(value, column_info)
+          parse_and_format_array(value, column_info[:sql_type])
         else
           sanitize_string(value.to_s)
         end
+      end
+    end
+
+    def parse_and_format_special_type(value, column_info)
+      if column_info[:array] || column_info[:type] == :array
+        parse_and_format_array(value, column_info[:sql_type])
+      else
+        # Handle JSON/JSONB
+        json_value = value.is_a?(String) ? value : value.to_json
+        sanitize_string(json_value)
+      end
+    end
+
+    def parse_and_format_array(value, sql_type)
+      # Always cast empty or string representations of empty arrays to proper type
+      if value.nil? || value == '[]' || value == '{}' || (value.is_a?(Array) && value.empty?)
+        base_type = extract_base_type(sql_type)
+        return "'{}'" + "::#{base_type}[]"
+      end
+
+      # Parse the array if it's a string
+      array_value = case value
+                   when String
+                     begin
+                       JSON.parse(value)
+                     rescue JSON::ParserError
+                       value.gsub(/[{}"]/, '').split(',')
+                     end
+                   when Array
+                     value
+                   else
+                     [value]
+                   end
+
+      # Format the array elements
+      elements = array_value.map do |element|
+        case element
+        when String
+          sanitize_string(element)
+        when Numeric
+          element.to_s
+        when nil
+          'NULL'
+        else
+          sanitize_string(element.to_s)
+        end
+      end
+
+      base_type = extract_base_type(sql_type)
+      "ARRAY[#{elements.join(',')}]::#{base_type}[]"
+    end
+
+    def extract_base_type(sql_type)
+      case sql_type
+      when /character varying\[\]/i, /varchar\[\]/i
+        'varchar'
+      when /text\[\]/i
+        'text'
+      when /integer\[\]/i
+        'integer'
+      when /bigint\[\]/i
+        'bigint'
+      when /jsonb\[\]/i
+        'jsonb'
+      when /json\[\]/i
+        'json'
+      else
+        sql_type.sub(/\[\]$/, '')
       end
     end
 
