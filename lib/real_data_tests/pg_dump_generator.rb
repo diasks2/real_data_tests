@@ -2,6 +2,7 @@ require 'csv'
 require 'tmpdir'
 require 'fileutils'
 require 'json'
+require 'set'
 
 module RealDataTests
   class PgDumpGenerator
@@ -18,19 +19,37 @@ module RealDataTests
     private
 
     def sort_by_dependencies(records)
+      # Group records by their model class
       tables_with_records = records.group_by(&:class)
+
+      # Build dependency graph directly from the models we have
       dependencies = build_dependency_graph(tables_with_records.keys)
+
+      # Sort models based on dependencies
       sorted_models = topological_sort(dependencies)
 
+      # Map back to the actual records in dependency order
       sorted_models.flat_map { |model| tables_with_records[model] || [] }
     end
 
     def build_dependency_graph(models)
       models.each_with_object({}) do |model, deps|
-        deps[model] = model.reflect_on_all_associations(:belongs_to)
-          .reject(&:polymorphic?)
+        # We only need to consider belongs_to associations since they represent
+        # the true foreign key dependencies that affect insert order
+        direct_dependencies = model.reflect_on_all_associations(:belongs_to)
+          .reject(&:polymorphic?) # Skip polymorphic associations
           .map(&:klass)
+          .select { |klass| models.include?(klass) } # Only include models we actually have records for
           .uniq
+
+        # For HABTM associations, we need to ensure the join tables are handled correctly
+        habtm_dependencies = model.reflect_on_all_associations(:has_and_belongs_to_many)
+          .map { |assoc| assoc.join_table_model }
+          .compact
+          .select { |join_model| models.include?(join_model) }
+          .uniq
+
+        deps[model] = (direct_dependencies + habtm_dependencies).uniq
       end
     end
 
@@ -48,14 +67,17 @@ module RealDataTests
 
     def visit_model(model, dependencies, sorted, visited, temporary)
       return if visited.include?(model)
-      raise "Circular dependency detected" if temporary.include?(model)
+
+      if temporary.include?(model)
+        # Provide more context in the error message
+        cycle = detect_cycle(model, dependencies, temporary)
+        raise "Circular dependency detected: #{cycle.map(&:name).join(' -> ')}"
+      end
 
       temporary.add(model)
 
       (dependencies[model] || []).each do |dependency|
-        unless visited.include?(dependency)
-          visit_model(dependency, dependencies, sorted, visited, temporary)
-        end
+        visit_model(dependency, dependencies, sorted, visited, temporary) unless visited.include?(dependency)
       end
 
       temporary.delete(model)
@@ -63,12 +85,26 @@ module RealDataTests
       sorted << model
     end
 
+    def detect_cycle(start_model, dependencies, temporary)
+      cycle = [start_model]
+      current = dependencies[start_model]&.find { |dep| temporary.include?(dep) }
+
+      while current && current != start_model
+        cycle << current
+        current = dependencies[current]&.find { |dep| temporary.include?(dep) }
+      end
+
+      cycle << start_model if current == start_model
+      cycle
+    end
+
     def collect_inserts(records)
       records.map do |record|
         columns = record.class.column_names
         values = columns.map { |col| quote_value(record[col], get_column_type(record.class, col)) }
 
-        <<~SQL
+        # Generate INSERT statement with explicit column names
+        <<~SQL.strip
           INSERT INTO #{record.class.table_name}
           (#{columns.join(', ')})
           VALUES (#{values.join(', ')})
@@ -135,7 +171,7 @@ module RealDataTests
       options << "-p #{config[:port]}" if config[:port]
       options << "-U #{config[:username]}" if config[:username]
       options << "-d #{config[:database]}"
-      options << "-q"
+      options << "-q"  # Run quietly
       options.join(" ")
     end
   end

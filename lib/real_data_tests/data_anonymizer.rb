@@ -7,6 +7,12 @@ module RealDataTests
       @configuration = configuration
     end
 
+    def anonymize_records(records)
+      records.map do |record|
+        anonymize_record(record)
+      end
+    end
+
     def anonymize_record(record)
       return record unless should_anonymize?(record)
 
