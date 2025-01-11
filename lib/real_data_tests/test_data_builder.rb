@@ -14,16 +14,13 @@ module RealDataTests
         RealDataTests::DataAnonymizer.new(records).anonymize_records
       end
 
-      dump_commands = RealDataTests::PgDumpGenerator.new(records).generate
+      dump_content = RealDataTests::PgDumpGenerator.new(records).generate
 
       dump_path = dump_file_path
       FileUtils.mkdir_p(File.dirname(dump_path))
 
-      # Execute pg_dump and save the output directly to file
-      command = "#{dump_commands} > #{dump_path}"
-      unless system(command)
-        raise Error, "Failed to create dump file: #{command}"
-      end
+      # Write the SQL content to file
+      File.write(dump_path, dump_content)
 
       dump_path
     end
