@@ -83,12 +83,23 @@ module RealDataTests
       return 'NULL' if value.nil?
       return value if value =~ /^\d+$/  # If it's a number
 
-      # Handle JSON data types
-      if value.is_a?(Hash) || value.is_a?(Array)
-        return "'#{value.to_json.gsub("'", "''")}'"
+      # Handle special cases
+      case value
+      when Array
+        "'#{value.to_json}'"
+      when Hash
+        "'#{value.to_json}'"
+      when String
+        # If the string appears to be a serialized array/object, treat it as JSON
+        if (value.start_with?('[') && value.end_with?(']')) ||
+           (value.start_with?('{') && value.end_with?('}'))
+          "'#{value}'"
+        else
+          "'#{value.gsub("'", "''")}'"
+        end
+      else
+        "'#{value.to_s.gsub("'", "''")}'"
       end
-
-      "'#{value.to_s.gsub("'", "''")}'"
     end
 
     def connection_options
