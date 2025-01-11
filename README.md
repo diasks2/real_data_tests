@@ -186,9 +186,9 @@ See the [Faker documentation](https://github.com/faker-ruby/faker) for a complet
 
 ## Database Cleaner Integration
 
-If you're using DatabaseCleaner with models that have foreign key constraints, you'll need to handle the cleanup order carefully. Here are two approaches:
+If you're using DatabaseCleaner with models that have foreign key constraints, you'll need to handle the cleanup order carefully.
 
-### Option 1: Disable Foreign Key Constraints During Cleanup
+### Disable Foreign Key Constraints During Cleanup
 Add this to your DatabaseCleaner configuration:
 
 ```ruby
@@ -204,18 +204,6 @@ config.append_after(:suite) do
   end
 end
 ```
-
-### Option 2: Use Deletion Strategy with Proper Order
-If you prefer to maintain referential integrity during cleanup:
-
-```ruby
-config.append_after(:suite) do
-  # Delete records in reverse dependency order
-  [Patient, Organization, PatientStatus].reverse.each(&:delete_all)
-end
-```
-
-> **Note**: Replace the model list with your actual models in the correct dependency order.
 
 ## How It Works
 
