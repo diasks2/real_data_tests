@@ -28,16 +28,14 @@ module RealDataTests
       # Get all tables that have data
       tables = ActiveRecord::Base.connection.tables
 
-      # Build dependency graph
+      # Build dependency graph, but handle circular dependencies
       dependencies = {}
       tables.each do |table|
         model = table.classify.safe_constantize
         next unless model
 
-        foreign_keys = model.reflect_on_all_associations(:belongs_to).reject(&:polymorphic?).map do |assoc|
-          assoc.klass.table_name
-        end
-
+        # Get foreign key constraints from database instead of model associations
+        foreign_keys = ActiveRecord::Base.connection.foreign_keys(table).map(&:to_table)
         dependencies[table] = foreign_keys
       end
 
@@ -53,21 +51,25 @@ module RealDataTests
       visited = Set.new
       temporary = Set.new
 
-      dependencies.keys.each do |node|
-        visit_node(node, dependencies, sorted, visited, temporary) unless visited.include?(node)
+      dependencies.each_key do |table|
+        next if visited.include?(table)
+        safe_visit_node(table, dependencies, sorted, visited, temporary)
       end
 
       sorted.reverse
     end
 
-    def visit_node(node, dependencies, sorted, visited, temporary)
-      raise "Circular dependency detected" if temporary.include?(node)
+    def safe_visit_node(node, dependencies, sorted, visited, temporary)
+      return if visited.include?(node)
+
+      # If we detect a cycle, just continue without raising an error
+      return if temporary.include?(node)
+
       temporary.add(node)
 
       (dependencies[node] || []).each do |dependency|
-        unless visited.include?(dependency)
-          visit_node(dependency, dependencies, sorted, visited, temporary)
-        end
+        next if visited.include?(dependency)
+        safe_visit_node(dependency, dependencies, sorted, visited, temporary)
       end
 
       temporary.delete(node)

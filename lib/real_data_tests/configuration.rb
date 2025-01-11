@@ -11,6 +11,21 @@ module RealDataTests
       @cleanup_models = []
     end
 
+    # Only setup anonymization if we're in the right environment
+    def anonymize(model_name, mappings = {})
+      # Convert model_name to string to handle both class and string inputs
+      model_name = model_name.to_s
+
+      # Only set up anonymization if we can load the model
+      if model_name.safe_constantize
+        @anonymization_rules[model_name] ||= {}
+        @anonymization_rules[model_name].merge!(mappings)
+      end
+    rescue NameError => e
+      # Log warning but don't fail
+      warn "Warning: Could not set up anonymization for #{model_name}. Error: #{e.message}"
+    end
+
     # Set associations to exclude (blacklist mode)
     def exclude_associations(*associations)
       raise Error, "Cannot set excluded_associations when included_associations is already set" if @association_filter_mode == :whitelist

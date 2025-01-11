@@ -82,7 +82,13 @@ module RealDataTests
     def quote_value(value)
       return 'NULL' if value.nil?
       return value if value =~ /^\d+$/  # If it's a number
-      "'#{value.to_s.gsub("'", "''")}'" # Escape single quotes for PostgreSQL
+
+      # Handle JSON data types
+      if value.is_a?(Hash) || value.is_a?(Array)
+        return "'#{value.to_json.gsub("'", "''")}'"
+      end
+
+      "'#{value.to_s.gsub("'", "''")}'"
     end
 
     def connection_options

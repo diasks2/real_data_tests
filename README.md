@@ -52,13 +52,13 @@ RealDataTests.configure do |config|
   config.excluded_associations = [:very_large_association]
 
   # Configure data anonymization
-  config.anonymize User, {
+  config.anonymize 'User', {
     first_name: 'Faker::Name.first_name',
     last_name: 'Faker::Name.last_name',
     email: 'Faker::Internet.email'
   }
 
-  config.anonymize Customer, {
+  config.anonymize 'Customer', {
     phone_number: 'Faker::PhoneNumber.phone_number',
     address: 'Faker::Address.street_address'
   }
