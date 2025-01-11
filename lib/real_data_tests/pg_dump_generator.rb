@@ -218,11 +218,27 @@ module RealDataTests
     end
 
     def format_array(value, column_info)
-      array_value = value.is_a?(String) ? JSON.parse(value) : value
-      base_type = extract_base_type(column_info[:sql_type])
+      # Handle empty arrays
+      if value.nil? || value == '[]' || value == '{}' || (value.is_a?(Array) && value.empty?)
+        return "'{}'" + "::character varying[]" if column_info[:type] == :string
+        return "'{}'" + "::#{extract_base_type(column_info[:sql_type])}[]"
+      end
 
-      return "'{}'::#{column_info[:sql_type]}" if array_value.empty?
+      # Parse the array if it's a string
+      array_value = case value
+                   when String
+                     begin
+                       JSON.parse(value)
+                     rescue JSON::ParserError
+                       value.gsub(/[{}"]/, '').split(',')
+                     end
+                   when Array
+                     value
+                   else
+                     [value]
+                   end
 
+      # Format array elements
       elements = array_value.map do |element|
         case element
         when String
@@ -236,12 +252,33 @@ module RealDataTests
         end
       end
 
-      "ARRAY[#{elements.join(',')}]::#{column_info[:sql_type]}"
+      # Use character varying[] for string arrays
+      array_type = if column_info[:type] == :string
+                    'character varying[]'
+                  else
+                    "#{extract_base_type(column_info[:sql_type])}[]"
+                  end
+
+      "ARRAY[#{elements.join(',')}]::#{array_type}"
     end
 
     def extract_base_type(sql_type)
-      # Extracts the base type from array types like "integer[]" or "character varying[]"
-      sql_type.sub(/\[\]$/, '')
+      case sql_type
+      when /character varying\[\]/i, /varchar\[\]/i
+        'character varying'
+      when /text\[\]/i
+        'text'
+      when /integer\[\]/i
+        'integer'
+      when /bigint\[\]/i
+        'bigint'
+      when /jsonb\[\]/i
+        'jsonb'
+      when /json\[\]/i
+        'json'
+      else
+        sql_type.sub(/\[\]$/, '')
+      end
     end
 
     def sanitize_string(str)
