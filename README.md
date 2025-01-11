@@ -12,6 +12,7 @@ Real Data Tests solves this by:
 - Automatically analyzing and extracting real records and their associations
 - Creating reusable SQL dumps that can be committed to your repository
 - Making it easy to load realistic test data in your specs
+- Supporting data anonymization for sensitive information
 
 ## Requirements
 
@@ -48,24 +49,29 @@ RealDataTests.configure do |config|
   # Directory where SQL dumps will be stored
   config.dump_path = 'spec/fixtures/real_data_dumps'
 
-  # Optionally exclude specific associations from being collected
-  config.excluded_associations = [:very_large_association]
-end
+  # Configure which associations to include (whitelist mode)
+  config.include_associations(
+    :user,
+    :profile,
+    :posts,
+    :comments
+  )
 
-Rails.application.config.after_initialize do
-  RealDataTests.configure do |config|
-    # Configure data anonymization
-    config.anonymize 'User', {
-      first_name: 'Faker::Name.first_name',
-      last_name: 'Faker::Name.last_name',
-      email: 'Faker::Internet.email'
-    }
+  # Or exclude specific associations (blacklist mode)
+  # config.exclude_associations(:very_large_association)
 
-    config.anonymize 'Customer', {
-      phone_number: 'Faker::PhoneNumber.phone_number',
-      address: 'Faker::Address.street_address'
-    }
-  end
+  # Configure data anonymization with proper lambda syntax
+  config.anonymize 'User', {
+    first_name: -> (_) { Faker::Name.first_name },
+    last_name:  -> (_) { Faker::Name.last_name },
+    email:      -> (user) { Faker::Internet.email(name: "user#{user.id}") }
+  }
+
+  config.anonymize 'Patient', {
+    first_name: -> (_) { Faker::Name.first_name },
+    last_name:  -> (_) { Faker::Name.last_name },
+    phone:      -> (_) { Faker::PhoneNumber.phone_number }
+  }
 end
 ```
 
@@ -91,8 +97,9 @@ $ bundle exec real_data_tests create_dump User 1 active_user_with_posts
 
 This will:
 1. Find the specified User record
-2. Collect all associated records (posts, comments, etc.)
-3. Generate a SQL dump file in your configured dump_path
+2. Collect all associated records based on your configuration
+3. Apply any configured anonymization rules
+4. Generate a SQL dump file in your configured dump_path
 
 ### 2. Using in Tests
 
@@ -123,64 +130,70 @@ RSpec.describe "Blog" do
 end
 ```
 
-## Data Anonymization
-
-Real Data Tests integrates with the Faker gem to help you anonymize sensitive data before creating test dumps. This is particularly useful when working with production data that contains personal information.
-
-### Configuring Anonymization
-
-You can specify which fields should be anonymized and what Faker generators to use:
-
-```ruby
-RealDataTests.configure do |config|
-  # Anonymize User fields
-  config.anonymize User, {
-    first_name: 'Faker::Name.first_name',
-    last_name: 'Faker::Name.last_name',
-    email: 'Faker::Internet.email'
-  }
-
-  # Anonymize Customer fields
-  config.anonymize Customer, {
-    phone_number: 'Faker::PhoneNumber.phone_number',
-    address: 'Faker::Address.street_address'
-  }
-end
-```
-
-The anonymization happens automatically when creating dump files. The original data in your development/production database remains unchanged - only the exported test data is anonymized.
-
 ## Association Filtering
 
 Real Data Tests provides two mutually exclusive approaches to control which associations are collected:
-
-### Blacklist Mode
-Use this when you want to collect all associations EXCEPT specific ones:
-```ruby
-RealDataTests.configure do |config|
-  config.exclude_associations :comment, :notification, :large_association
-end
-```
 
 ### Whitelist Mode
 Use this when you want to ONLY collect specific associations:
 ```ruby
 RealDataTests.configure do |config|
-  config.include_associations :post, :profile, :avatar
+  config.include_associations(
+    :user,
+    :profile,
+    :posts,
+    :comments
+  )
+end
+```
+
+### Blacklist Mode
+Use this when you want to collect all associations EXCEPT specific ones:
+```ruby
+RealDataTests.configure do |config|
+  config.exclude_associations(
+    :large_association,
+    :unused_association
+  )
 end
 ```
 
 > **Note**: You must choose either blacklist or whitelist mode, not both. Attempting to use both will raise an error.
 
-### Available Faker Generators
+## Data Anonymization
 
-You can use any generator from the Faker gem. Some common examples:
+Real Data Tests uses lambdas with the Faker gem for flexible data anonymization. Each anonymization rule receives the record as an argument, allowing for dynamic value generation:
 
-- Names: `Faker::Name.first_name`, `Faker::Name.last_name`
-- Internet: `Faker::Internet.email`, `Faker::Internet.username`
-- Addresses: `Faker::Address.street_address`, `Faker::Address.city`
-- Phone Numbers: `Faker::PhoneNumber.phone_number`
-- Companies: `Faker::Company.name`, `Faker::Company.industry`
+```ruby
+RealDataTests.configure do |config|
+  config.anonymize 'User', {
+    # Simple value replacement
+    first_name: -> (_) { Faker::Name.first_name },
+
+    # Dynamic value based on record
+    email: -> (user) { Faker::Internet.email(name: "user#{user.id}") },
+
+    # Custom anonymization logic
+    full_name: -> (user) {
+      "#{Faker::Name.first_name} #{Faker::Name.last_name}"
+    }
+  }
+end
+```
+
+### Common Faker Examples
+
+```ruby
+{
+  name:         -> (_) { Faker::Name.name },
+  username:     -> (_) { Faker::Internet.username },
+  email:        -> (_) { Faker::Internet.email },
+  phone:        -> (_) { Faker::PhoneNumber.phone_number },
+  address:      -> (_) { Faker::Address.street_address },
+  company:      -> (_) { Faker::Company.name },
+  description:  -> (_) { Faker::Lorem.paragraph }
+}
+```
 
 See the [Faker documentation](https://github.com/faker-ruby/faker) for a complete list of available generators.
 
@@ -215,8 +228,9 @@ end
 
 1. **Version Control**: Commit your SQL dumps to version control so all developers have access to the same test data.
 2. **Meaningful Names**: Use descriptive names for your dump files that indicate the scenario they represent.
-3. **Data Privacy**: Be careful not to commit sensitive data. Consider anonymizing personal information before creating dumps.
-4. **Selective Collection**: Use `excluded_associations` to prevent collecting unnecessary or sensitive associations.
+3. **Data Privacy**: Always use anonymization for sensitive data before creating dumps.
+4. **Association Control**: Use association filtering to keep dumps focused and maintainable.
+5. **Unique Identifiers**: Use record IDs in anonymized data to maintain uniqueness (e.g., emails).
 
 ## Development
 
