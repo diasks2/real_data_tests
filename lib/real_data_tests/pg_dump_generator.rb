@@ -100,11 +100,22 @@ module RealDataTests
 
     def collect_inserts(records)
       records.map do |record|
+        table_name = record.class.table_name
         columns = record.class.column_names
-        values = columns.map { |col| quote_value(record, col) }
+
+        # Get the actual database values for each column
+        values = columns.map do |column|
+          if record.class.respond_to?(:defined_enums) && record.class.defined_enums.key?(column)
+            # Get the raw database value for the enum
+            raw_value = record.read_attribute_before_type_cast(column)
+            raw_value.nil? ? 'NULL' : raw_value.to_s
+          else
+            quote_value(record[column], get_column_type(record.class, column))
+          end
+        end
 
         <<~SQL.strip
-          INSERT INTO #{record.class.table_name}
+          INSERT INTO #{table_name}
           (#{columns.join(', ')})
           VALUES (#{values.join(', ')})
           ON CONFLICT (id) DO NOTHING;
@@ -116,18 +127,8 @@ module RealDataTests
       model.columns_hash[column_name].type
     end
 
-    def quote_value(record, column_name)
-      value = record[column_name]
+    def quote_value(value, column_type)
       return 'NULL' if value.nil?
-
-      column_type = get_column_type(record.class, column_name)
-
-      # Check if the column is an enum
-      if record.class.respond_to?(:defined_enums) && record.class.defined_enums.key?(column_name)
-        # Get the integer value for the enum
-        enum_value = record.class.defined_enums[column_name][value.to_s]
-        return enum_value.to_s
-      end
 
       case column_type
       when :integer, :decimal, :float
