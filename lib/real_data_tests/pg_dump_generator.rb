@@ -101,9 +101,8 @@ module RealDataTests
     def collect_inserts(records)
       records.map do |record|
         columns = record.class.column_names
-        values = columns.map { |col| quote_value(record[col], get_column_type(record.class, col)) }
+        values = columns.map { |col| quote_value(record, col) }
 
-        # Generate INSERT statement with explicit column names
         <<~SQL.strip
           INSERT INTO #{record.class.table_name}
           (#{columns.join(', ')})
@@ -117,8 +116,18 @@ module RealDataTests
       model.columns_hash[column_name].type
     end
 
-    def quote_value(value, column_type)
+    def quote_value(record, column_name)
+      value = record[column_name]
       return 'NULL' if value.nil?
+
+      column_type = get_column_type(record.class, column_name)
+
+      # Check if the column is an enum
+      if record.class.respond_to?(:defined_enums) && record.class.defined_enums.key?(column_name)
+        # Get the integer value for the enum
+        enum_value = record.class.defined_enums[column_name][value.to_s]
+        return enum_value.to_s
+      end
 
       case column_type
       when :integer, :decimal, :float
