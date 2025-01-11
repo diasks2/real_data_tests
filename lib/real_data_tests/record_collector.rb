@@ -25,7 +25,8 @@ module RealDataTests
       return false if @processed_associations.include?(association_key)
       @processed_associations.add(association_key)
 
-      return false unless RealDataTests.configuration.should_process_association?(association.name)
+      # Use the enhanced should_process_association? method
+      return false unless RealDataTests.configuration.should_process_association?(record, association.name)
 
       # Check for prevented reciprocal loading
       if RealDataTests.configuration.prevent_reciprocal?(record.class, association.name)
@@ -53,28 +54,28 @@ module RealDataTests
       puts "Found #{associations.length} associations"
 
       associations.each do |association|
-        association_key = "#{record.class.name}##{record.id}:#{association.name}"
-        next if @processed_associations.include?(association_key)
-        @processed_associations.add(association_key)
+        should_process = RealDataTests.configuration.should_process_association?(record, association.name)
 
-        should_process = RealDataTests.configuration.should_process_association?(association.name)
         unless should_process
-          puts "  Skipping #{RealDataTests.configuration.association_filter_mode == :whitelist ? 'non-whitelisted' : 'blacklisted'} association: #{association.name}"
+          puts "  Skipping #{RealDataTests.configuration.association_filter_mode == :whitelist ? 'non-whitelisted' : 'blacklisted'} association: #{association.name} for #{record.class.name}"
           next
         end
 
         puts "  Processing #{association.macro} association: #{association.name}"
+        process_association(record, association)
+      end
+    end
 
-        begin
-          related_records = fetch_related_records(record, association)
-          count = related_records.length
-          puts "    Found #{count} related #{association.name} records"
-          @collection_stats[record.class.name][:associations][association.name] += count
+    def process_association(record, association)
+      begin
+        related_records = fetch_related_records(record, association)
+        count = related_records.length
+        puts "    Found #{count} related #{association.name} records"
+        @collection_stats[record.class.name][:associations][association.name] += count
 
-          related_records.each { |related_record| collect_record(related_record) }
-        rescue => e
-          puts "    Error processing association #{association.name}: #{e.message}"
-        end
+        related_records.each { |related_record| collect_record(related_record) }
+      rescue => e
+        puts "    Error processing association #{association.name}: #{e.message}"
       end
     end
 

@@ -2,16 +2,16 @@
 module RealDataTests
   class Configuration
     attr_accessor :dump_path, :cleanup_models
-    attr_reader :association_filter_mode, :association_filter_list,
-                :association_limits, :prevent_reciprocal_loading
+    attr_reader :association_filter_mode, :association_filter_list, :anonymization_rules,
+                :model_specific_associations, :association_limits, :prevent_reciprocal_loading
 
     def initialize
       @dump_path = 'spec/fixtures/real_data_dumps'
       @anonymization_rules = {}
       @association_filter_mode = nil
       @association_filter_list = []
+      @model_specific_associations = {}
       @cleanup_models = []
-      @delayed_anonymizations = []
       @association_limits = {}
       @prevent_reciprocal_loading = {}
     end
@@ -54,16 +54,25 @@ module RealDataTests
       if @association_filter_mode == :blacklist
         raise Error, "Cannot set included_associations when excluded_associations is already set"
       end
-
       @association_filter_mode = :whitelist
       @association_filter_list = associations.flatten
     end
 
-    def configure_cleanup(*models)
-      @cleanup_models = models.flatten
+    # New method for model-specific association rules
+    def include_associations_for(model, *associations)
+      model_name = model.is_a?(String) ? model : model.name
+      @model_specific_associations[model_name] = associations.flatten
     end
 
-    def should_process_association?(association_name)
+    def should_process_association?(model, association_name)
+      model_name = model.is_a?(Class) ? model.name : model.class.name
+
+      # Check model-specific rules first
+      if @model_specific_associations.key?(model_name)
+        return @model_specific_associations[model_name].include?(association_name)
+      end
+
+      # Fall back to global rules
       case @association_filter_mode
       when :whitelist
         @association_filter_list.include?(association_name)
@@ -72,6 +81,10 @@ module RealDataTests
       else
         true
       end
+    end
+
+    def configure_cleanup(*models)
+      @cleanup_models = models.flatten
     end
 
     # Configure limits for specific associations

@@ -50,16 +50,16 @@ Rails.application.config.after_initialize do
     # Directory where SQL dumps will be stored
     config.dump_path = 'spec/fixtures/real_data_dumps'
 
-    # Configure which associations to include (whitelist mode)
+    # Global associations (apply to all models)
     config.include_associations(
       :user,
-      :profile,
-      :posts,
-      :comments
+      :organization,
+      :profile
     )
 
-    # Or exclude specific associations (blacklist mode)
-    # config.exclude_associations(:very_large_association)
+    # Model-specific associations
+    config.include_associations_for 'Patient', :visit_notes, :treatment_reports
+    config.include_associations_for 'Discipline', :organization, :user
 
     # Control association loading behavior
     config.limit_association 'Patient.visit_notes', 10
@@ -70,12 +70,6 @@ Rails.application.config.after_initialize do
       first_name: -> (_) { Faker::Name.first_name },
       last_name:  -> (_) { Faker::Name.last_name },
       email:      -> (user) { Faker::Internet.email(name: "user#{user.id}") }
-    }
-
-    config.anonymize 'Patient', {
-      first_name: -> (_) { Faker::Name.first_name },
-      last_name:  -> (_) { Faker::Name.last_name },
-      phone:      -> (_) { Faker::PhoneNumber.phone_number }
     }
   end
 end
@@ -136,49 +130,81 @@ RSpec.describe "Blog" do
 end
 ```
 
-## Association Loading Control
+## Association Control
 
-Real Data Tests provides fine-grained control over how associations are loaded. This is particularly useful for managing large datasets and preventing circular references.
+Real Data Tests provides several ways to control how associations are collected and loaded.
 
-### Limiting Association Records
+### Global Association Filtering
 
-You can limit the number of records loaded for specific has_many associations:
+You can control which associations are collected globally using either whitelist or blacklist mode:
 
 ```ruby
-RealDataTests.configure do |config|
-  # Limit Patient.visit_notes to only load the 10 most recent records
-  config.limit_association 'Patient.visit_notes', 10
+# Whitelist Mode - ONLY collect these associations
+config.include_associations(
+  :user,
+  :organization,
+  :profile
+)
 
-  # Limit Organization.employees to 100 records
-  config.limit_association 'Organization.employees', 100
-end
+# OR Blacklist Mode - collect all EXCEPT these associations
+config.exclude_associations(
+  :very_large_association,
+  :unused_association
+)
 ```
 
-### Preventing Reciprocal Loading
+### Model-Specific Associations
 
-For associations that reference each other, you can prevent circular loading:
+For more granular control, you can specify which associations should be collected for specific models:
 
 ```ruby
 RealDataTests.configure do |config|
-  # Prevent VisitNoteType from loading all associated visit_notes
-  config.prevent_reciprocal 'VisitNoteType.visit_notes'
+  # Global associations that apply to all models
+  config.include_associations(
+    :organization,
+    :user
+  )
 
-  # Prevent Department from loading all employees when an employee is loaded
-  config.prevent_reciprocal 'Department.employees'
+  # Model-specific associations
+  config.include_associations_for 'Patient',
+    :visit_notes,
+    :treatment_reports,
+    :patient_status
+
+  config.include_associations_for 'Discipline',
+    :organization,  # Will collect this even though it's in global associations
+    :credentials,
+    :specialty_types
 end
 ```
 
 This is particularly useful when:
-- You want to load a record's associations but not their reciprocal associations
-- You need to prevent circular references in complex association chains
-- You want to control the depth of association loading
+- Different models need different association rules
+- The same association name means different things on different models
+- You want to collect an association from one model but not another
+- You need to maintain a clean separation of concerns in your test data
 
-### Best Practices for Association Loading
+### Association Loading Control
 
-1. **Identify Circular References**: Look for models that reference each other and use `prevent_reciprocal` to break the circle.
-2. **Control Data Volume**: Use `limit_association` for has_many relationships that could return large numbers of records.
-3. **Consider Load Order**: When using both features, think about which associations should be limited vs prevented.
-4. **Monitor Performance**: Watch the size of your dump files and adjust limits as needed.
+You can further refine how associations are loaded using limits and reciprocal prevention:
+
+```ruby
+RealDataTests.configure do |config|
+  # Limit the number of records loaded for specific associations
+  config.limit_association 'Patient.visit_notes', 10
+
+  # Prevent loading associations in the reverse direction
+  config.prevent_reciprocal 'VisitNoteType.visit_notes'
+end
+```
+
+### Best Practices for Association Control
+
+1. **Start with Global Rules**: Define global association rules that apply to most models
+2. **Add Model-Specific Rules**: Use `include_associations_for` when you need different rules for specific models
+3. **Control Data Volume**: Use `limit_association` for has_many relationships that could return large numbers of records
+4. **Prevent Cycles**: Use `prevent_reciprocal` to break circular references in your association chain
+5. **Monitor Performance**: Watch the size of your dump files and adjust your association rules as needed
 
 ## Association Filtering
 
