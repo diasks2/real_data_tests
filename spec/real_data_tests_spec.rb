@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+require 'spec_helper'
 
 RSpec.describe RealDataTests do
   let(:configuration) { described_class.configuration }

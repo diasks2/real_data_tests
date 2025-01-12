@@ -3,8 +3,8 @@ require 'faker'
 
 module RealDataTests
   class DataAnonymizer
-    def initialize(configuration)
-      @configuration = configuration
+    def initialize(preset_config)
+      @preset_config = preset_config
     end
 
     def anonymize_records(records)
@@ -16,38 +16,32 @@ module RealDataTests
     def anonymize_record(record)
       return record unless should_anonymize?(record)
 
-      anonymization_rules = @configuration.anonymization_rules[record.class.name]
-
+      anonymization_rules = @preset_config.anonymization_rules[record.class.name]
       anonymization_rules.each do |attribute, anonymizer|
         begin
           new_value = case anonymizer
                      when String
-                       # Handle legacy string-based Faker calls
                        process_faker_string(anonymizer)
                      when Proc, Lambda
-                       # Handle lambda-based anonymizers
                        anonymizer.call(record)
                      else
                        raise Error, "Unsupported anonymizer type: #{anonymizer.class}"
                      end
-
           record.send("#{attribute}=", new_value)
         rescue => e
           raise Error, "Failed to anonymize #{attribute} using #{anonymizer.inspect}: #{e.message}"
         end
       end
-
       record
     end
 
     private
 
     def should_anonymize?(record)
-      @configuration.anonymization_rules.key?(record.class.name)
+      @preset_config.anonymization_rules.key?(record.class.name)
     end
 
     def process_faker_string(faker_method)
-      # Support legacy string format like "Faker::Name.first_name"
       faker_class, faker_method = faker_method.split('::')[1..].join('::').split('.')
       faker_class = Object.const_get("Faker::#{faker_class}")
       faker_class.send(faker_method)

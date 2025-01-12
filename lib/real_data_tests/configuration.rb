@@ -1,7 +1,7 @@
 module RealDataTests
   class Configuration
-    attr_accessor :dump_path
-    attr_reader :presets, :current_preset
+    attr_accessor :dump_path, :current_preset
+    attr_reader :presets
 
     def initialize
       @dump_path = 'spec/fixtures/real_data_dumps'

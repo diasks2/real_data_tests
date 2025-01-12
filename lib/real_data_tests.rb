@@ -1,13 +1,14 @@
 # frozen_string_literal: true
 
-require 'real_data_tests/configuration'
-require 'real_data_tests/data_anonymizer'
-require 'real_data_tests/engine' if defined?(Rails)
-require 'real_data_tests/pg_dump_generator'
-require 'real_data_tests/record_collector'
-require 'real_data_tests/rspec_helper'
-require 'real_data_tests/test_data_builder'
-require 'real_data_tests/version'
+require 'rails'
+require_relative 'real_data_tests/version'
+require_relative 'real_data_tests/configuration'
+require_relative 'real_data_tests/data_anonymizer'
+require_relative 'real_data_tests/engine' if defined?(Rails)
+require_relative 'real_data_tests/pg_dump_generator'
+require_relative 'real_data_tests/record_collector'
+require_relative 'real_data_tests/rspec_helper'
+require_relative 'real_data_tests/test_data_builder'
 
 module RealDataTests
   class Error < StandardError; end
@@ -26,6 +27,18 @@ module RealDataTests
 
     def reset_configuration!
       @configuration = Configuration.new
+    end
+
+    def use_preset(name)
+      configuration.use_preset(name)
+    end
+
+    def with_preset(name)
+      previous_preset = configuration.current_preset
+      configuration.use_preset(name)
+      yield if block_given?
+    ensure
+      configuration.current_preset = previous_preset
     end
 
     def create_dump_file(record, name: nil)

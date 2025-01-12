@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    real_data_tests (0.1.0)
+    real_data_tests (0.2.0)
       activerecord (>= 5.0)
       faker (~> 3.0)
       pg (>= 1.1)
@@ -211,6 +211,7 @@ PLATFORMS
 
 DEPENDENCIES
   database_cleaner (~> 2.0)
+  database_cleaner-active_record
   rake (~> 13.0)
   real_data_tests!
   rspec (~> 3.0)
