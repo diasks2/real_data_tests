@@ -15,6 +15,14 @@ module RealDataTests
       @current_preset = @presets[name]
     end
 
+    def get_association_limit(record_class, association_name)
+      current_preset&.get_association_limit(record_class, association_name)
+    end
+
+    def prevent_reciprocal?(record_class, association_name)
+      current_preset&.prevent_reciprocal?(record_class, association_name)
+    end
+
     def preset(name, &block)
       name = name.to_sym
       @presets[name] = PresetConfig.new
@@ -87,6 +95,16 @@ module RealDataTests
 
     def limit_association(path, limit)
       @association_limits[path.to_s] = limit
+    end
+
+    def get_association_limit(record_class, association_name)
+      path = "#{record_class.name}.#{association_name}"
+      @association_limits[path]
+    end
+
+    def prevent_reciprocal?(record_class, association_name)
+      path = "#{record_class.name}.#{association_name}"
+      @prevent_reciprocal_loading[path]
     end
 
     def prevent_reciprocal(path)
