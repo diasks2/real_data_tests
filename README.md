@@ -50,30 +50,114 @@ Rails.application.config.after_initialize do
     # Directory where SQL dumps will be stored
     config.dump_path = 'spec/fixtures/real_data_dumps'
 
-    # Global associations (apply to all models)
-    config.include_associations(
-      :user,
-      :organization,
-      :profile
-    )
+    # Define a preset for collecting patient visit data
+    config.preset :patient_visits do |p|
+      p.include_associations(
+        :visit_note_type,
+        :patient_status
+      )
 
-    # Model-specific associations
-    config.include_associations_for 'Patient', :visit_notes, :treatment_reports
-    config.include_associations_for 'Discipline', :organization, :user
+      p.include_associations_for 'Patient',
+        :visit_notes,
+        :treatment_reports
 
-    # Control association loading behavior
-    config.limit_association 'Patient.visit_notes', 10
-    config.prevent_reciprocal 'VisitNoteType.visit_notes'
+      p.prevent_reciprocal 'VisitNoteType.visit_notes'
 
-    # Configure data anonymization
-    config.anonymize 'User', {
-      first_name: -> (_) { Faker::Name.first_name },
-      last_name:  -> (_) { Faker::Name.last_name },
-      email:      -> (user) { Faker::Internet.email(name: "user#{user.id}") }
+      p.anonymize 'Patient', {
+        first_name: -> (_) { Faker::Name.first_name },
+        last_name:  -> (_) { Faker::Name.last_name }
+      }
+    end
+
+    # Define a preset for organization structure
+    config.preset :org_structure do |p|
+      p.include_associations(
+        :organization,
+        :user
+      )
+
+      p.include_associations_for 'Department',
+        :employees,
+        :managers
+
+      p.limit_association 'Department.employees', 100
+
+      p.anonymize 'User', {
+        email: -> (user) { Faker::Internet.email(name: "user#{user.id}") }
+      }
+    end
+  end
+end
+```
+
+## Using Presets
+
+Real Data Tests allows you to define multiple configuration presets for different data extraction needs. This is particularly useful when you need different association rules and anonymization settings for different testing scenarios.
+
+### Defining Presets
+
+You can define presets in your configuration:
+
+```ruby
+RealDataTests.configure do |config|
+  # Define a preset for patient data
+  config.preset :patient_data do |p|
+    p.include_associations(:patient_status, :visit_note_type)
+    p.include_associations_for 'Patient', :visit_notes
+    p.limit_association 'Patient.visit_notes', 10
+  end
+
+  # Define another preset for billing data
+  config.preset :billing_data do |p|
+    p.include_associations(:payment_method, :insurance_provider)
+    p.include_associations_for 'Invoice', :line_items, :payments
+    p.anonymize 'PaymentMethod', {
+      account_number: -> (_) { Faker::Finance.credit_card }
     }
   end
 end
 ```
+
+### Using Presets in Your Code
+
+You can use presets in several ways:
+
+```ruby
+# Create dump file using a specific preset
+RealDataTests.with_preset(:patient_data) do
+  RealDataTests.create_dump_file(patient, name: "patient_with_visits")
+end
+
+# Switch to a different preset
+RealDataTests.use_preset(:billing_data)
+RealDataTests.create_dump_file(invoice, name: "invoice_with_payments")
+
+# Use in tests
+RSpec.describe "Patient Visits" do
+  it "loads visit data correctly" do
+    RealDataTests.with_preset(:patient_data) do
+      load_real_test_data("patient_with_visits")
+      # Your test code here
+    end
+  end
+end
+```
+
+### Benefits of Using Presets
+
+- **Organized Configuration**: Keep related association rules and anonymization settings together
+- **Reusability**: Define configurations once and reuse them across different tests
+- **Clarity**: Make it clear what data is being extracted for each testing scenario
+- **Flexibility**: Easily switch between different data extraction rules
+- **Maintainability**: Update all related settings in one place
+
+### Best Practices for Presets
+
+1. **Descriptive Names**: Use clear, purpose-indicating names for your presets
+2. **Single Responsibility**: Each preset should focus on a specific testing scenario
+3. **Documentation**: Comment your presets to explain their purpose and usage
+4. **Composition**: Group related models and their associations in the same preset
+5. **Version Control**: Keep preset definitions with your test code for easy reference
 
 ## Usage
 

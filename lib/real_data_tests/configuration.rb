@@ -1,53 +1,67 @@
-# lib/real_data_tests/configuration.rb
 module RealDataTests
   class Configuration
-    attr_accessor :dump_path, :cleanup_models
-    attr_reader :association_filter_mode, :association_filter_list, :anonymization_rules,
-                :model_specific_associations, :association_limits, :prevent_reciprocal_loading
+    attr_accessor :dump_path
+    attr_reader :presets, :current_preset
 
     def initialize
       @dump_path = 'spec/fixtures/real_data_dumps'
-      @anonymization_rules = {}
+      @presets = {}
+      @current_preset = nil
+      create_preset(:default) # Always have a default preset
+    end
+
+    private def create_preset(name)
+      @presets[name] = PresetConfig.new
+      @current_preset = @presets[name]
+    end
+
+    def preset(name, &block)
+      name = name.to_sym
+      @presets[name] = PresetConfig.new
+      @current_preset = @presets[name]
+      yield(@current_preset) if block_given?
+      @current_preset = @presets[:default]
+    end
+
+    def use_preset(name)
+      name = name.to_sym
+      raise Error, "Preset '#{name}' not found" unless @presets.key?(name)
+      @current_preset = @presets[name]
+    end
+
+    def with_preset(name)
+      previous_preset = @current_preset
+      use_preset(name)
+      yield if block_given?
+    ensure
+      @current_preset = previous_preset
+    end
+
+    def method_missing(method_name, *args, &block)
+      if @current_preset.respond_to?(method_name)
+        @current_preset.public_send(method_name, *args, &block)
+      else
+        super
+      end
+    end
+
+    def respond_to_missing?(method_name, include_private = false)
+      @current_preset.respond_to?(method_name) || super
+    end
+  end
+
+  class PresetConfig
+    attr_reader :association_filter_mode, :association_filter_list,
+                :model_specific_associations, :association_limits,
+                :prevent_reciprocal_loading, :anonymization_rules
+
+    def initialize
       @association_filter_mode = nil
       @association_filter_list = []
       @model_specific_associations = {}
-      @cleanup_models = []
       @association_limits = {}
       @prevent_reciprocal_loading = {}
-    end
-
-    def anonymize(model_name, mappings = {})
-      if defined?(::Rails::Engine)
-        unless ::Rails::Engine.subclasses.map(&:name).include?('RealDataTests::Engine')
-          @delayed_anonymizations << [model_name, mappings]
-          return
-        end
-      end
-
-      begin
-        model = model_name.to_s.constantize
-        @anonymization_rules[model_name.to_s] = mappings
-      rescue => e
-        warn "Note: Anonymization for #{model_name} will be configured when Rails is fully initialized."
-      end
-    end
-
-    def process_delayed_anonymizations
-      return unless @delayed_anonymizations
-
-      @delayed_anonymizations.each do |model_name, mappings|
-        anonymize(model_name, mappings)
-      end
-      @delayed_anonymizations = []
-    end
-
-    def exclude_associations(*associations)
-      if @association_filter_mode == :whitelist
-        raise Error, "Cannot set excluded_associations when included_associations is already set"
-      end
-
-      @association_filter_mode = :blacklist
-      @association_filter_list = associations.flatten
+      @anonymization_rules = {}
     end
 
     def include_associations(*associations)
@@ -58,21 +72,38 @@ module RealDataTests
       @association_filter_list = associations.flatten
     end
 
-    # New method for model-specific association rules
+    def exclude_associations(*associations)
+      if @association_filter_mode == :whitelist
+        raise Error, "Cannot set excluded_associations when included_associations is already set"
+      end
+      @association_filter_mode = :blacklist
+      @association_filter_list = associations.flatten
+    end
+
     def include_associations_for(model, *associations)
       model_name = model.is_a?(String) ? model : model.name
       @model_specific_associations[model_name] = associations.flatten
     end
 
+    def limit_association(path, limit)
+      @association_limits[path.to_s] = limit
+    end
+
+    def prevent_reciprocal(path)
+      @prevent_reciprocal_loading[path.to_s] = true
+    end
+
+    def anonymize(model_name, mappings = {})
+      @anonymization_rules[model_name.to_s] = mappings
+    end
+
     def should_process_association?(model, association_name)
       model_name = model.is_a?(Class) ? model.name : model.class.name
 
-      # Check model-specific rules first
       if @model_specific_associations.key?(model_name)
         return @model_specific_associations[model_name].include?(association_name)
       end
 
-      # Fall back to global rules
       case @association_filter_mode
       when :whitelist
         @association_filter_list.include?(association_name)
@@ -82,35 +113,5 @@ module RealDataTests
         true
       end
     end
-
-    def configure_cleanup(*models)
-      @cleanup_models = models.flatten
-    end
-
-    # Configure limits for specific associations
-    # Example: limit_association 'Patient.visit_notes', 10
-    def limit_association(path, limit)
-      @association_limits[path.to_s] = limit
-    end
-
-    # Prevent loading reciprocal associations
-    # Example: prevent_reciprocal 'VisitNoteType.visit_notes'
-    def prevent_reciprocal(path)
-      @prevent_reciprocal_loading[path.to_s] = true
-    end
-
-    # Get limit for a specific association
-    def get_association_limit(record_class, association_name)
-      path = "#{record_class.name}.#{association_name}"
-      @association_limits[path]
-    end
-
-    # Check if reciprocal loading should be prevented
-    def prevent_reciprocal?(record_class, association_name)
-      path = "#{record_class.name}.#{association_name}"
-      @prevent_reciprocal_loading[path]
-    end
   end
-
-  class Error < StandardError; end
 end
