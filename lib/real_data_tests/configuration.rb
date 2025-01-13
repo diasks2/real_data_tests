@@ -102,6 +102,11 @@ module RealDataTests
       @association_limits[path]
     end
 
+    def set_association_limit(model_name, association_name, limit)
+      path = "#{model_name}.#{association_name}"
+      @association_limits[path] = limit
+    end
+
     def prevent_reciprocal?(record_class, association_name)
       path = "#{record_class.name}.#{association_name}"
       @prevent_reciprocal_loading[path]

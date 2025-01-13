@@ -90,6 +90,37 @@ Rails.application.config.after_initialize do
 end
 ```
 
+## Polymorphic Association Support
+
+Real Data Tests supports collecting records through polymorphic associations. This feature allows you to:
+- Automatically detect and collect records for polymorphic `belongs_to`, `has_many`, and `has_one` associations.
+- Track and report the types of records collected through polymorphic associations in detailed collection statistics.
+
+### Example
+If your model includes a polymorphic association like this:
+
+```ruby
+class Payment < ApplicationRecord
+  belongs_to :billable, polymorphic: true
+end
+```
+
+Real Data Tests will:
+1. Collect the associated `billable` records regardless of their type (e.g., `InsuranceCompany`, `Patient`).
+2. Include the `billable_type` in the collection statistics for transparency and reporting.
+
+### Configuration for Polymorphic Associations
+Polymorphic associations are automatically handled based on your existing configuration. You can also explicitly include or limit polymorphic associations, like so:
+
+```ruby
+RealDataTests.configure do |config|
+  config.include_associations_for 'Payment', :billable
+  config.limit_association 'Payment.billable', 5
+end
+```
+
+This ensures a robust and flexible way to handle even the most complex relationships in your data.
+
 ## Using Presets
 
 Real Data Tests allows you to define multiple configuration presets for different data extraction needs. This is particularly useful when you need different association rules and anonymization settings for different testing scenarios.
@@ -267,6 +298,22 @@ This is particularly useful when:
 - The same association name means different things on different models
 - You want to collect an association from one model but not another
 - You need to maintain a clean separation of concerns in your test data
+
+### Polymorphic Associations
+Polymorphic associations are fully supported. Include and configure them as needed:
+
+```ruby
+RealDataTests.configure do |config|
+  config.include_associations_for 'Payment', :billable
+end
+```
+
+You can also limit or prevent reciprocal loading for polymorphic associations:
+
+```ruby
+config.limit_association 'Payment.billable', 10
+config.prevent_reciprocal 'Payment.billable'
+```
 
 ### Association Loading Control
 

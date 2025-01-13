@@ -1,5 +1,17 @@
 ## [Unreleased]
 
+## [0.3.0] - 2025-01-13
+### Added
+- **Polymorphic Association Support**:
+  - RecordCollector now supports tracking and collecting records from polymorphic associations.
+  - Polymorphic `belongs_to`, `has_many`, and `has_one` associations are automatically detected and processed during data collection.
+  - Added tracking for polymorphic types in `@collection_stats` to provide detailed insights into polymorphic relationships.
+  - Graceful handling of missing records in polymorphic associations using error logging.
+
+### Fixed
+- Improved error handling for `ActiveRecord::RecordNotFound` exceptions when loading polymorphic associations.
+- Correctly initializes and updates association statistics for polymorphic associations in `@collection_stats`.
+
 ## [0.2.1] - 2025-01-13
 ### Fixed
 - Fixed JSONB field handling to output '{}' instead of empty string for blank values
