@@ -138,8 +138,14 @@ module RealDataTests
         value.to_s
       when :boolean
         value.to_s
-      when :array, :json, :jsonb
-        parse_and_format_special_type(value, column_info)
+      when :jsonb, :json
+        if value.blank?
+          "'{}'"  # Return empty JSON object for blank JSONB/JSON fields
+        else
+          sanitize_string(value.is_a?(String) ? value : value.to_json)
+        end
+      when :array
+        parse_and_format_array(value, column_info[:sql_type])
       else
         if column_info[:array]
           parse_and_format_array(value, column_info[:sql_type])

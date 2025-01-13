@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+## [0.2.1] - 2025-01-13
+### Fixed
+- Fixed JSONB field handling to output '{}' instead of empty string for blank values
+- Added test coverage for JSONB field handling in PgDumpGenerator
+
 ## [0.2.0] - 2025-01-13
 ### Added
 - New preset system for managing different test data configurations
