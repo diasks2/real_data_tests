@@ -103,23 +103,81 @@ module RealDataTests
       statements
     end
 
-    def clean_sql_statement(statement)
-      # Handle VALUES clause formatting
-      if statement.include?('VALUES')
-        # Split into pre-VALUES and VALUES parts
-        parts = statement.split(/VALUES\s*\(/i, 2)
-        if parts.length == 2
-          # Properly quote UUIDs and strings in the VALUES part
-          values_part = parts[1]
-          values_part = values_part.gsub(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?=[,\s)])/i, "'\\1'")
-          # Quote unquoted string values
-          values_part = values_part.gsub(/,\s*([^',\s][^,\s]*)(?=[,\s)])/, ", '\\1'")
-          # Reassemble the statement
-          statement = parts[0] + 'VALUES (' + values_part
+          def clean_sql_statement(statement)
+        # Handle VALUES clause formatting
+        if statement.include?('VALUES')
+          # Split into pre-VALUES and VALUES parts
+          parts = statement.split(/VALUES\s*\(/i, 2)
+          if parts.length == 2
+            # Get the column names from the first part
+            column_names = parts[0].scan(/\((.*?)\)/).flatten.first&.split(',')&.map(&:strip) || []
+
+            # Split values into individual items
+            values_part = parts[1]
+            values = split_values(values_part)
+
+            # Process each value according to its column and position
+            values.each_with_index do |value, i|
+              # Skip if already properly quoted
+              next if value.start_with?("'") && value.end_with?("'")
+
+              # Quote UUIDs
+              if value.match?(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+                values[i] = "'#{value}'"
+              # Quote any non-NULL string values that contain spaces or special characters
+              elsif !['NULL', 'true', 'false'].include?(value) &&
+                    !value.match?(/^\d+$/) && # not a number
+                    !value.start_with?("'{") && # not a JSON object
+                    !value.start_with?("'") # not already quoted
+                values[i] = "'#{value}'"
+              end
+            end
+
+            # Reassemble the statement with any trailing ON CONFLICT clause
+            remainder = values_part.match(/\)\s*(ON\s+CONFLICT.*?)(;?\s*$)/i)
+            statement = parts[0] + 'VALUES (' + values.join(', ') + ')'
+            statement += " #{remainder[1]};" if remainder
+          end
         end
+
+        statement
       end
 
-      statement
-    end
+      def split_values(values_part)
+        values = []
+        current_value = ''
+        in_quotes = false
+        in_json = false
+        depth = 0
+
+        values_part.chars.each_with_index do |char, i|
+          case char
+          when "'"
+            # Toggle quote state if not escaped
+            if i == 0 || values_part[i-1] != '\\'
+              in_quotes = !in_quotes
+            end
+          when '{'
+            depth += 1 unless in_quotes
+            in_json = true unless in_quotes
+          when '}'
+            depth -= 1 unless in_quotes
+          when ','
+            if !in_quotes && depth == 0
+              values << current_value.strip
+              current_value = ''
+              next
+            end
+          end
+          current_value << char
+        end
+
+        # Add the last value (remove trailing ';' or ')')
+        last_value = current_value.strip
+        last_value = last_value[0..-2] if last_value.end_with?(';', ')')
+        values << last_value
+
+        values
+      end
   end
 end

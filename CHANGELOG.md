@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+## [0.3.6] - 2025-01-14
+### Fixed
+- Further enhanced SQL statement handling in native loader
+  - Fixed handling of SQL statements with ON CONFLICT clauses
+  - Improved quoting for company names containing spaces
+  - Added proper handling of trailing semicolons
+  - Enhanced detection and preservation of SQL statement structure
+
 ## [0.3.5] - 2025-01-14
 ### Fixed
 - Enhanced SQL statement handling in native loader
