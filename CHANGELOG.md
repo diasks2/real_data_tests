@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+## [0.3.7] - 2025-01-14
+### Fixed
+- Corrected SQL value handling in native loader
+  - Fixed boolean value handling, particularly at the end of VALUES clauses
+  - Improved handling of NULL values and numbers
+  - Added proper whitespace cleaning for values
+  - Enhanced value type detection for correct quoting
+
 ## [0.3.6] - 2025-01-14
 ### Fixed
 - Further enhanced SQL statement handling in native loader

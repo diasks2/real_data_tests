@@ -103,81 +103,83 @@ module RealDataTests
       statements
     end
 
-          def clean_sql_statement(statement)
-        # Handle VALUES clause formatting
-        if statement.include?('VALUES')
-          # Split into pre-VALUES and VALUES parts
-          parts = statement.split(/VALUES\s*\(/i, 2)
-          if parts.length == 2
-            # Get the column names from the first part
-            column_names = parts[0].scan(/\((.*?)\)/).flatten.first&.split(',')&.map(&:strip) || []
+    def clean_sql_statement(statement)
+      # Extract the ON CONFLICT clause if it exists
+      statement, conflict_clause = extract_conflict_clause(statement)
 
-            # Split values into individual items
-            values_part = parts[1]
-            values = split_values(values_part)
+      # Handle VALUES clause formatting
+      if statement.include?('VALUES')
+        # Split into pre-VALUES and VALUES parts
+        parts = statement.split(/VALUES\s*\(/i, 2)
+        if parts.length == 2
+          # Clean and process the values
+          values = clean_values(parts[1].split(/\)\s*$/)[0])
 
-            # Process each value according to its column and position
-            values.each_with_index do |value, i|
-              # Skip if already properly quoted
-              next if value.start_with?("'") && value.end_with?("'")
-
-              # Quote UUIDs
-              if value.match?(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
-                values[i] = "'#{value}'"
-              # Quote any non-NULL string values that contain spaces or special characters
-              elsif !['NULL', 'true', 'false'].include?(value) &&
-                    !value.match?(/^\d+$/) && # not a number
-                    !value.start_with?("'{") && # not a JSON object
-                    !value.start_with?("'") # not already quoted
-                values[i] = "'#{value}'"
-              end
-            end
-
-            # Reassemble the statement with any trailing ON CONFLICT clause
-            remainder = values_part.match(/\)\s*(ON\s+CONFLICT.*?)(;?\s*$)/i)
-            statement = parts[0] + 'VALUES (' + values.join(', ') + ')'
-            statement += " #{remainder[1]};" if remainder
-          end
+          # Reassemble the statement
+          statement = "#{parts[0]}VALUES (#{values})"
         end
-
-        statement
       end
 
-      def split_values(values_part)
-        values = []
-        current_value = ''
-        in_quotes = false
-        in_json = false
-        depth = 0
+      # Add back the conflict clause if it existed
+      statement += " #{conflict_clause}" if conflict_clause
+      statement += ";"
 
-        values_part.chars.each_with_index do |char, i|
-          case char
-          when "'"
-            # Toggle quote state if not escaped
-            if i == 0 || values_part[i-1] != '\\'
-              in_quotes = !in_quotes
-            end
-          when '{'
-            depth += 1 unless in_quotes
-            in_json = true unless in_quotes
-          when '}'
-            depth -= 1 unless in_quotes
-          when ','
-            if !in_quotes && depth == 0
-              values << current_value.strip
-              current_value = ''
-              next
-            end
+      statement
+    end
+
+    def extract_conflict_clause(statement)
+      if statement =~ /(.+?)(\s+ON\s+CONFLICT\s+.*?)(?:;?\s*$)/i
+        [$1, $2.strip]
+      else
+        [statement.sub(/;?\s*$/, ''), nil]
+      end
+    end
+
+    def clean_values(values_str)
+      values = []
+      current_value = ''
+      in_quotes = false
+      nested_level = 0
+
+      values_str.chars.each do |char|
+        case char
+        when "'"
+          in_quotes = !in_quotes
+          current_value << char
+        when '{'
+          nested_level += 1
+          current_value << char
+        when '}'
+          nested_level -= 1
+          current_value << char
+        when ','
+          if !in_quotes && nested_level == 0
+            values << clean_value(current_value.strip)
+            current_value = ''
+          else
+            current_value << char
           end
+        else
           current_value << char
         end
-
-        # Add the last value (remove trailing ';' or ')')
-        last_value = current_value.strip
-        last_value = last_value[0..-2] if last_value.end_with?(';', ')')
-        values << last_value
-
-        values
       end
+
+      values << clean_value(current_value.strip)
+      values.join(', ')
+    end
+
+    def clean_value(value)
+      return value if value.start_with?("'") # Already quoted
+      return value if value.start_with?("'{") # JSON object
+      return 'NULL' if value.upcase == 'NULL'
+      return value.downcase if ['true', 'false'].include?(value.downcase)
+      return value if value.match?(/^\d+$/) # Numbers
+
+      if value.match?(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+        "'#{value}'" # UUID
+      else
+        "'#{value}'" # Other strings
+      end
+    end
   end
 end
