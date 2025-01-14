@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+## [0.3.5] - 2025-01-14
+### Fixed
+- Enhanced SQL statement handling in native loader
+  - Added proper UUID value quoting in VALUES clauses
+  - Fixed string value formatting in SQL statements
+  - Improved error reporting with detailed SQL statement context
+  - Added robust SQL statement cleaning and normalization
+
 ## [0.3.4] - 2025-01-14
 ### Added
 - Alternative native SQL loading method for CI environments

@@ -39,9 +39,12 @@ module RealDataTests
           statements.each do |statement|
             next if statement.strip.empty?
             begin
-              connection.execute(statement)
+              # Clean up any formatting issues that might cause syntax errors
+              cleaned_statement = clean_sql_statement(statement)
+              connection.execute(cleaned_statement)
             rescue ActiveRecord::StatementInvalid => e
-              raise Error, "Failed to execute SQL statement: #{e.message}"
+              # Provide detailed error information
+              raise Error, "Failed to execute SQL statement: #{e.message}\nStatement: #{cleaned_statement}"
             end
           end
         ensure
@@ -98,6 +101,25 @@ module RealDataTests
       statements << current_statement.strip if current_statement.strip.length > 0
 
       statements
+    end
+
+    def clean_sql_statement(statement)
+      # Handle VALUES clause formatting
+      if statement.include?('VALUES')
+        # Split into pre-VALUES and VALUES parts
+        parts = statement.split(/VALUES\s*\(/i, 2)
+        if parts.length == 2
+          # Properly quote UUIDs and strings in the VALUES part
+          values_part = parts[1]
+          values_part = values_part.gsub(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?=[,\s)])/i, "'\\1'")
+          # Quote unquoted string values
+          values_part = values_part.gsub(/,\s*([^',\s][^,\s]*)(?=[,\s)])/, ", '\\1'")
+          # Reassemble the statement
+          statement = parts[0] + 'VALUES (' + values_part
+        end
+      end
+
+      statement
     end
   end
 end
