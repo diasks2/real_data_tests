@@ -103,6 +103,15 @@ module RealDataTests
       statements
     end
 
+    def extract_conflict_clause(statement)
+      # Use a more precise regex that handles multiple closing parentheses
+      if statement =~ /(.+?\))\s*(ON\s+CONFLICT\s+.*?)(?:;?\s*$)/i
+        [$1, $2.strip]
+      else
+        [statement.sub(/;?\s*$/, ''), nil]
+      end
+    end
+
     def clean_sql_statement(statement)
       # Extract the ON CONFLICT clause if it exists
       statement, conflict_clause = extract_conflict_clause(statement)
@@ -115,24 +124,18 @@ module RealDataTests
           # Clean and process the values
           values = clean_values(parts[1].split(/\)\s*$/)[0])
 
-          # Reassemble the statement
+          # Make sure we properly close the VALUES parentheses
           statement = "#{parts[0]}VALUES (#{values})"
         end
       end
 
       # Add back the conflict clause if it existed
-      statement += " #{conflict_clause}" if conflict_clause
-      statement += ";"
+      statement = "#{statement}#{conflict_clause ? ' ' + conflict_clause : ''}"
+
+      # Ensure the statement ends with a semicolon
+      statement += ";" unless statement.end_with?(';')
 
       statement
-    end
-
-    def extract_conflict_clause(statement)
-      if statement =~ /(.+?)(\s+ON\s+CONFLICT\s+.*?)(?:;?\s*$)/i
-        [$1, $2.strip]
-      else
-        [statement.sub(/;?\s*$/, ''), nil]
-      end
     end
 
     def clean_values(values_str)

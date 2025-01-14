@@ -62,6 +62,25 @@ RSpec.describe RealDataTests::RSpecHelper do
     end
   end
 
+  describe '#clean_sql_statement' do
+    it 'handles complex INSERT with multiple closing parentheses and ON CONFLICT' do
+      sql = <<~SQL
+        INSERT INTO users (email, active, timezone, verified)
+        VALUES ('test@example.com', false, 'Eastern Time (US & Canada)', true)
+        ON CONFLICT (email) DO NOTHING;
+      SQL
+      cleaned = helper.send(:clean_sql_statement, sql)
+      expect(remove_whitespace(cleaned)).to include("'Eastern Time (US & Canada)'")
+      expect(remove_whitespace(cleaned)).to match(/true\)\s+ON CONFLICT/)
+    end
+
+    it 'preserves spacing around ON CONFLICT clause' do
+      sql = "INSERT INTO users (id) VALUES (1) ON CONFLICT (id) DO NOTHING;"
+      cleaned = helper.send(:clean_sql_statement, sql)
+      expect(cleaned).to match(/\)\s+ON CONFLICT/)
+    end
+  end
+
   describe '#clean_values' do
     let(:helper) { Class.new { include RealDataTests::RSpecHelper }.new }
 
