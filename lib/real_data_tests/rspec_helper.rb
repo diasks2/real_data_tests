@@ -29,26 +29,19 @@ module RealDataTests
         connection.execute('SET session_replication_role = replica;')
 
         begin
-          # Read the SQL file content
           sql_content = File.read(dump_path)
-
-          # Split the file into individual statements
           statements = split_sql_statements(sql_content)
 
-          # Execute each statement
-          statements.each do |statement|
-            next if statement.strip.empty?
+          statements.each_with_index do |statement, index|
             begin
-              # Clean up any formatting issues that might cause syntax errors
               cleaned_statement = clean_sql_statement(statement)
+              puts "Executing Statement ##{index + 1}: #{cleaned_statement}" # Debug log
               connection.execute(cleaned_statement)
             rescue ActiveRecord::StatementInvalid => e
-              # Provide detailed error information
-              raise Error, "Failed to execute SQL statement: #{e.message}\nStatement: #{cleaned_statement}"
+              raise Error, "Error executing statement ##{index + 1}: #{e.message}\nSQL: #{cleaned_statement}"
             end
           end
         ensure
-          # Re-enable foreign key checks
           connection.execute('SET session_replication_role = DEFAULT;')
         end
       end
@@ -95,7 +88,7 @@ module RealDataTests
       # Add the last statement if it exists
       statements << current_statement.strip unless current_statement.strip.empty?
 
-      # Ensure `ON CONFLICT` stays with the previous statement
+      # Normalize `ON CONFLICT` clauses
       statements = statements.each_with_object([]) do |stmt, result|
         if stmt.strip.upcase.start_with?('ON CONFLICT')
           result[-1] = "#{result.last.strip} #{stmt.strip}"
@@ -104,10 +97,10 @@ module RealDataTests
         end
       end
 
-      # Normalize spacing around `ON CONFLICT` and ensure semicolons
+      # Ensure semicolons and spacing
       statements.map! do |stmt|
         stmt = stmt.gsub(/\)\s*ON CONFLICT/, ') ON CONFLICT') # Normalize spacing
-        stmt.strip.end_with?(';') ? stmt.strip : "#{stmt.strip};" # Ensure semicolon
+        stmt.strip.end_with?(';') ? stmt.strip : "#{stmt.strip};"
       end
 
       statements
