@@ -90,36 +90,80 @@ module RealDataTests
       options.join(" ")
     end
 
+    class SqlBlock
+      attr_reader :type, :content, :table_name
+
+      def initialize(content)
+        @content = content.strip
+        @type = determine_block_type
+        @table_name = extract_table_name if @type == :insert
+      end
+
+      private
+
+      def determine_block_type
+        if @content.match?(/\AINSERT INTO/i)
+          :insert
+        elsif @content.match?(/\ACOPY.*FROM stdin/i)
+          :copy
+        elsif @content.match?(/\AALTER TABLE/i)
+          :alter
+        elsif @content.match?(/\ASET/i)
+          :set
+        else
+          :other
+        end
+      end
+
+      def extract_table_name
+        if @content =~ /INSERT INTO\s+"?([^\s"(]+)"?\s/i
+          $1
+        end
+      end
+    end
+
     def parse_sql_blocks(content)
       blocks = []
       current_block = []
       in_copy_block = false
 
       content.each_line do |line|
-        line = line.strip
-        next if line.empty? || line.start_with?('--')
+        line = line.chomp
 
-        if line.upcase.start_with?('COPY') && line.upcase.include?('FROM stdin')
+        # Skip empty lines and comments unless in COPY block
+        next if !in_copy_block && (line.empty? || line.start_with?('--'))
+
+        # Handle start of COPY block
+        if !in_copy_block && line.upcase.match?(/\ACOPY.*FROM stdin/i)
+          current_block = [line]
           in_copy_block = true
-          current_block << line
-        elsif line == '\.' && in_copy_block
-          in_copy_block = false
+          next
+        end
+
+        # Handle end of COPY block
+        if in_copy_block && line == '\\.'
           current_block << line
           blocks << SqlBlock.new(current_block.join("\n"))
           current_block = []
-        elsif in_copy_block
+          in_copy_block = false
+          next
+        end
+
+        # Accumulate lines in COPY block
+        if in_copy_block
           current_block << line
-        else
-          # Handle regular SQL statements
-          current_block << line
-          if line.end_with?(';') && !in_copy_block
-            blocks << SqlBlock.new(current_block.join("\n"))
-            current_block = []
-          end
+          next
+        end
+
+        # Handle regular SQL statements
+        current_block << line
+        if line.end_with?(';')
+          blocks << SqlBlock.new(current_block.join("\n"))
+          current_block = []
         end
       end
 
-      # Add any remaining block
+      # Handle any remaining block
       blocks << SqlBlock.new(current_block.join("\n")) unless current_block.empty?
       blocks
     end
@@ -137,8 +181,24 @@ module RealDataTests
 
     def execute_insert_block(block, index, total)
       puts "Executing INSERT block #{index}/#{total} for table: #{block.table_name}"
-      statement = normalize_insert_statement(block.content)
-      ActiveRecord::Base.connection.execute(statement)
+      # Don't modify statements that already end with semicolon
+      statement = if block.content.strip.end_with?(';')
+        block.content
+      else
+        "#{block.content};"
+      end
+
+      begin
+        ActiveRecord::Base.connection.execute(statement)
+      rescue ActiveRecord::StatementInvalid => e
+        if e.message.include?('syntax error at or near "ON"')
+          # Try alternative formatting for ON CONFLICT
+          modified_statement = statement.gsub(/\)\s+ON\s+CONFLICT/, ') ON CONFLICT')
+          ActiveRecord::Base.connection.execute(modified_statement)
+        else
+          raise
+        end
+      end
     end
 
     def execute_copy_block(block, index, total)
@@ -152,13 +212,22 @@ module RealDataTests
     end
 
     def normalize_insert_statement(statement)
-      # Handle ON CONFLICT clauses properly
-      if statement =~ /(.*?)\s+(ON\s+CONFLICT.*?)\s*;\s*\z/i
-        main_insert = $1
-        conflict_clause = $2
-        "#{main_insert} #{conflict_clause};"
+      # First clean up any excess whitespace around parentheses
+      statement = statement.gsub(/\(\s+/, '(')
+                          .gsub(/\s+\)/, ')')
+                          .gsub(/\)\s+ON\s+CONFLICT/, ') ON CONFLICT')
+
+      # Ensure proper spacing around ON CONFLICT
+      if statement =~ /(.*?)\s*ON\s+CONFLICT\s+(.*?)\s*(?:DO\s+.*?)?\s*;\s*\z/i
+        base = $1.strip
+        conflict_part = $2.strip
+        action_part = $3&.strip || 'DO NOTHING'
+
+        # Rebuild the statement with consistent formatting
+        "#{base} ON CONFLICT #{conflict_part} #{action_part};"
       else
-        statement
+        # If no ON CONFLICT clause, just clean up the spacing
+        statement.strip.sub(/;?\s*$/, ';')
       end
     end
 
