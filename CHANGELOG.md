@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+## [0.3.10] - 2025-01-14
+### Fixed
+- Enhanced SQL statement parsing in native loader
+  - Improved handling of complex ON CONFLICT clauses with multiple closing parentheses
+  - Fixed spacing issues between VALUES and ON CONFLICT clauses
+  - Enhanced regex pattern for more precise conflict clause extraction
+  - Added proper statement reassembly for complex SQL structures
+
 ## [0.3.9] - 2025-01-14
 ### Fixed
 - Enhanced SQL statement parsing in native loader

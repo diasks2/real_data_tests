@@ -102,6 +102,22 @@ RSpec.describe RealDataTests::RSpecHelper do
       expect(remove_whitespace(cleaned)).to match(/true\)\s+ON CONFLICT/)
       expect(remove_whitespace(cleaned)).to match(/DO NOTHING;$/)  # Changed this line
     end
+
+    it 'handles VALUES statement without INSERT INTO' do
+      sql = "VALUES (e50d8052-4481-4246-9502-7f8e5659abcb, Lebsack, Glover, false);"
+      cleaned = helper.send(:clean_sql_statement, sql)
+      expect(remove_whitespace(cleaned)).to eq(
+        "VALUES ('e50d8052-4481-4246-9502-7f8e5659abcb', 'Lebsack', 'Glover', false);"
+      )
+    end
+
+    it 'properly quotes UUIDs in bare VALUES statements' do
+      sql = "VALUES (e50d8052-4481-4246-9502-7f8e5659abcb, 'Test');"
+      cleaned = helper.send(:clean_sql_statement, sql)
+      expect(remove_whitespace(cleaned)).to eq(
+        "VALUES ('e50d8052-4481-4246-9502-7f8e5659abcb', 'Test');"
+      )
+    end
   end
 
   describe '#clean_complex_values' do

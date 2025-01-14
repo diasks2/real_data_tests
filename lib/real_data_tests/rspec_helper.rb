@@ -113,10 +113,10 @@ module RealDataTests
     end
 
     def clean_sql_statement(statement)
-      # First, detect if this is an INSERT statement with VALUES
-      if statement =~ /INSERT INTO.*VALUES\s*\(/i
-        # Split the statement into three parts: pre-VALUES, values, and post-VALUES (ON CONFLICT clause)
-        if statement =~ /(.*VALUES\s*\()(.*)(\)\s*(?:ON CONFLICT.*)?;?\s*$)/i
+      # Match either INSERT INTO...VALUES or just VALUES
+      if statement =~ /(?:INSERT INTO.*)?VALUES\s*\(/i
+        # Split the statement into parts, being careful with the ending
+        if statement =~ /(.*?VALUES\s*\()(.*)(\)\s*(?:ON CONFLICT.*)?;?\s*$)/i
           pre_values = $1
           values_content = $2
           post_values = $3
@@ -124,9 +124,10 @@ module RealDataTests
           # Clean the values content while preserving complex JSON
           cleaned_values = clean_complex_values(values_content)
 
-          # Reassemble the statement
+          # Reassemble the statement, ensuring exactly one semicolon at the end
           statement = "#{pre_values}#{cleaned_values}#{post_values}"
-          statement += ";" unless statement.end_with?(";")
+          statement = statement.gsub(/;*\s*$/, '')  # Remove any trailing semicolons and whitespace
+          statement += ";"
         end
       end
       statement
@@ -138,6 +139,7 @@ module RealDataTests
       in_quotes = false
       in_json = false
       json_brace_count = 0
+      escaped = false
 
       chars = values_str.chars
       i = 0
@@ -145,11 +147,14 @@ module RealDataTests
         char = chars[i]
 
         case char
+        when '\\'
+          current_value << char
+          escaped = !escaped
         when "'"
-          # Check if this is an escaped quote
-          if i > 0 && chars[i-1] != '\\'
+          if !escaped
             in_quotes = !in_quotes
           end
+          escaped = false
           current_value << char
         when '{'
           if !in_quotes
@@ -171,6 +176,7 @@ module RealDataTests
             current_value << char
           end
         else
+          escaped = false
           current_value << char
         end
         i += 1
@@ -180,6 +186,21 @@ module RealDataTests
       values << clean_value(current_value.strip) unless current_value.strip.empty?
 
       values.join(', ')
+    end
+
+    def clean_value(value)
+      return value if value.start_with?("'") # Already quoted
+      return value if value.start_with?("'{") # JSON object
+      return 'NULL' if value.upcase == 'NULL'
+      return value.downcase if ['true', 'false'].include?(value.downcase)
+      return value if value.match?(/^\d+$/) # Numbers
+
+      if value.match?(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+        "'#{value}'" # UUID
+      else
+        # Handle any other string value, including those with commas
+        "'#{value}'" # Other strings
+      end
     end
 
     def clean_values(values_str)
@@ -213,20 +234,6 @@ module RealDataTests
 
       values << clean_value(current_value.strip)
       values.join(', ')
-    end
-
-    def clean_value(value)
-      return value if value.start_with?("'") # Already quoted
-      return value if value.start_with?("'{") # JSON object
-      return 'NULL' if value.upcase == 'NULL'
-      return value.downcase if ['true', 'false'].include?(value.downcase)
-      return value if value.match?(/^\d+$/) # Numbers
-
-      if value.match?(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
-        "'#{value}'" # UUID
-      else
-        "'#{value}'" # Other strings
-      end
     end
   end
 end
