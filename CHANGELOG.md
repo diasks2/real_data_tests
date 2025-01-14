@@ -1,5 +1,21 @@
 ## [Unreleased]
 
+## [0.3.3] - 2025-01-14
+### Fixed
+- Improved circular dependency handling in PgDumpGenerator for self-referential associations
+  - Added robust checks for self-referential associations during topological sort
+  - Updated dependency graph building to properly exclude prevented circular dependencies
+  - Fixed model name handling in circular dependency error messages
+  - Improved error reporting for circular dependency detection
+- Enhanced PresetConfiguration circular dependency prevention
+  - Added more reliable tracking of prevented reciprocal associations using Sets
+  - Improved handling of both class and string model names in prevention checks
+  - Better support for multiple prevented dependencies per model
+- Updated record collection depth handling
+  - Fixed max depth enforcement for nested associations
+  - Added proper depth tracking for self-referential relationships
+  - Improved interaction between max depth and circular dependency prevention
+
 ## [0.3.2] - 2025-01-14
 ### Fixed
 - Enhanced association statistics tracking in RecordCollector

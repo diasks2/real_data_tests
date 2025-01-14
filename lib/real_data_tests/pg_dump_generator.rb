@@ -34,15 +34,19 @@ module RealDataTests
 
     def build_dependency_graph(models)
       models.each_with_object({}) do |model, deps|
-        # We only need to consider belongs_to associations since they represent
-        # the true foreign key dependencies that affect insert order
+        # Get direct dependencies from belongs_to associations
         direct_dependencies = model.reflect_on_all_associations(:belongs_to)
           .reject(&:polymorphic?) # Skip polymorphic associations
+          .reject do |assoc|
+            # Skip self-referential associations that are configured to prevent circular deps
+            assoc.klass == model &&
+            RealDataTests.configuration.current_preset.prevent_reciprocal?(model, assoc.name)
+          end
           .map(&:klass)
-          .select { |klass| models.include?(klass) } # Only include models we actually have records for
+          .select { |klass| models.include?(klass) }
           .uniq
 
-        # For HABTM associations, we need to ensure the join tables are handled correctly
+        # Handle HABTM associations
         habtm_dependencies = model.reflect_on_all_associations(:has_and_belongs_to_many)
           .map { |assoc| assoc.join_table_model }
           .compact
@@ -69,9 +73,12 @@ module RealDataTests
       return if visited.include?(model)
 
       if temporary.include?(model)
-        # Provide more context in the error message
-        cycle = detect_cycle(model, dependencies, temporary)
-        raise "Circular dependency detected: #{cycle.map(&:name).join(' -> ')}"
+        # Only raise if this isn't a prevented self-reference
+        unless RealDataTests.configuration.current_preset.prevent_reciprocal?(model, model.model_name.singular)
+          cycle = detect_cycle(model, dependencies, temporary)
+          raise "Circular dependency detected: #{cycle.map(&:name).join(' -> ')}"
+        end
+        return
       end
 
       temporary.add(model)

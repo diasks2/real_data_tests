@@ -87,6 +87,14 @@ module RealDataTests
       @prevented_reciprocals << key
     end
 
+    def max_self_ref_depth=(depth)
+      @max_self_ref_depth = depth
+    end
+
+    def get_max_self_ref_depth(model)
+      @max_self_ref_depth
+    end
+
     def has_circular_dependency?(klass, association_name)
       key = if klass.is_a?(String)
         "#{klass}:#{association_name}"
