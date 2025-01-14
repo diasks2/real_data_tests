@@ -204,6 +204,53 @@ RSpec.describe RealDataTests::RSpecHelper do
   end
 
   describe '#split_sql_statements' do
+    it 'correctly handles multi-line INSERT statements with ON CONFLICT clauses' do
+      sql = <<~SQL
+        INSERT INTO organizations
+        (id, dba_name, legal_name, settings)
+        VALUES ('abc-123', 'Test Org', 'Legal Name', '{"setting":"value"}')
+        ON CONFLICT (id) DO NOTHING;
+        INSERT INTO patients
+        (id, first_name, last_name, settings)
+        VALUES ('def-456', 'John', 'Doe', '{"key":"value"}')
+        ON CONFLICT (id) DO NOTHING;
+        INSERT INTO simple_table (id) VALUES (1);
+      SQL
+
+      statements = helper.send(:split_sql_statements, sql)
+
+      # Should have exactly 3 statements
+      expect(statements.length).to eq(3)
+
+      # First statement should be a complete INSERT with ON CONFLICT
+      expect(statements[0]).to include('INSERT INTO organizations')
+      expect(statements[0]).to include('VALUES')
+      expect(statements[0]).to include('ON CONFLICT (id) DO NOTHING;')
+      expect(statements[0].scan(';').length).to eq(1)
+
+      # Second statement should also be complete
+      expect(statements[1]).to include('INSERT INTO patients')
+      expect(statements[1]).to include('VALUES')
+      expect(statements[1]).to include('ON CONFLICT (id) DO NOTHING;')
+      expect(statements[1].scan(';').length).to eq(1)
+
+      # Third statement should be a simple INSERT
+      expect(statements[2]).to eq('INSERT INTO simple_table (id) VALUES (1);')
+
+      # No statements should start with ON CONFLICT
+      expect(statements.none? { |stmt| stmt.strip.upcase.start_with?('ON CONFLICT') }).to be true
+
+      # Each statement should contain proper spacing around ON CONFLICT
+      statements.each do |stmt|
+        if stmt.include?('ON CONFLICT')
+          expect(stmt).to match(/\) ON CONFLICT/)  # Space after closing parenthesis
+          expect(stmt).to match(/DO NOTHING;$/)    # Proper ending
+        end
+      end
+    end
+  end
+
+  describe '#split_sql_statements' do
     it 'keeps ON CONFLICT clauses with their INSERT statements' do
       sql = <<~SQL
         INSERT INTO table1 (id, name) VALUES (1, 'test1') ON CONFLICT (id) DO NOTHING;

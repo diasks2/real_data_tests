@@ -75,41 +75,42 @@ module RealDataTests
       statements = []
       current_statement = ''
       in_string = false
-      in_conflict = false
-      quote_char = nil
+      escaped = false
 
       sql.each_char do |char|
-        # Detect start of quoted strings
-        if (char == "'" || char == '"') && !in_string
-          in_string = true
-          quote_char = char
-        # Detect end of quoted strings (matching quote type)
-        elsif (char == "'" || char == '"') && in_string && char == quote_char
-          in_string = false
-        # Track if we're in an ON CONFLICT clause
-        elsif char == 'O' && !in_string && current_statement.strip.end_with?(')')
-          # Look ahead to see if this is 'ON CONFLICT'
-          potential_conflict = sql[sql.index(char, sql.rindex(current_statement)), 11]
-          in_conflict = potential_conflict&.upcase == 'ON CONFLICT'
-        end
-
-        current_statement << char
-
-        # Only split on semicolon if we're not in a string and not in an ON CONFLICT clause
-        if char == ';' && !in_string && !in_conflict
-          statements << current_statement.strip
+        if char == '\\'
+          escaped = !escaped
+        elsif char == "'" && !escaped
+          in_string = !in_string
+        elsif char == ';' && !in_string
+          # Add the completed statement
+          statements << current_statement.strip unless current_statement.strip.empty?
           current_statement = ''
-          in_conflict = false
+          next
+        end
+        escaped = false
+        current_statement << char
+      end
+
+      # Add the last statement if it exists
+      statements << current_statement.strip unless current_statement.strip.empty?
+
+      # Ensure `ON CONFLICT` stays with the previous statement
+      statements = statements.each_with_object([]) do |stmt, result|
+        if stmt.strip.upcase.start_with?('ON CONFLICT')
+          result[-1] = "#{result.last.strip} #{stmt.strip}"
+        else
+          result << stmt.strip
         end
       end
 
-      # Add any remaining statement
-      statements << current_statement.strip if current_statement.strip.length > 0
-
-      statements.map do |stmt|
-        # Ensure each statement ends with a semicolon
-        stmt.end_with?(';') ? stmt : "#{stmt};"
+      # Normalize spacing around `ON CONFLICT` and ensure semicolons
+      statements.map! do |stmt|
+        stmt = stmt.gsub(/\)\s*ON CONFLICT/, ') ON CONFLICT') # Normalize spacing
+        stmt.strip.end_with?(';') ? stmt.strip : "#{stmt.strip};" # Ensure semicolon
       end
+
+      statements
     end
 
     def extract_conflict_clause(statement)
