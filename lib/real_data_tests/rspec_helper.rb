@@ -75,32 +75,41 @@ module RealDataTests
       statements = []
       current_statement = ''
       in_string = false
-      escaped = false
+      in_conflict = false
+      quote_char = nil
 
       sql.each_char do |char|
-        case char
-        when '\\'
-          escaped = !escaped
-        when "'"
-          in_string = !in_string unless escaped
-          escaped = false
-        when ';'
-          if !in_string
-            statements << current_statement.strip
-            current_statement = ''
-          else
-            current_statement << char
-          end
-        else
-          escaped = false
-          current_statement << char
+        # Detect start of quoted strings
+        if (char == "'" || char == '"') && !in_string
+          in_string = true
+          quote_char = char
+        # Detect end of quoted strings (matching quote type)
+        elsif (char == "'" || char == '"') && in_string && char == quote_char
+          in_string = false
+        # Track if we're in an ON CONFLICT clause
+        elsif char == 'O' && !in_string && current_statement.strip.end_with?(')')
+          # Look ahead to see if this is 'ON CONFLICT'
+          potential_conflict = sql[sql.index(char, sql.rindex(current_statement)), 11]
+          in_conflict = potential_conflict&.upcase == 'ON CONFLICT'
+        end
+
+        current_statement << char
+
+        # Only split on semicolon if we're not in a string and not in an ON CONFLICT clause
+        if char == ';' && !in_string && !in_conflict
+          statements << current_statement.strip
+          current_statement = ''
+          in_conflict = false
         end
       end
 
-      # Add the last statement if it doesn't end with a semicolon
+      # Add any remaining statement
       statements << current_statement.strip if current_statement.strip.length > 0
 
-      statements
+      statements.map do |stmt|
+        # Ensure each statement ends with a semicolon
+        stmt.end_with?(';') ? stmt : "#{stmt};"
+      end
     end
 
     def extract_conflict_clause(statement)

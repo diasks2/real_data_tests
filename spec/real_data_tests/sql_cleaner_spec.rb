@@ -203,6 +203,25 @@ RSpec.describe RealDataTests::RSpecHelper do
     end
   end
 
+  describe '#split_sql_statements' do
+    it 'keeps ON CONFLICT clauses with their INSERT statements' do
+      sql = <<~SQL
+        INSERT INTO table1 (id, name) VALUES (1, 'test1') ON CONFLICT (id) DO NOTHING;
+        INSERT INTO table2 (id) VALUES (2);
+        INSERT INTO table3 (id, name) VALUES (3, 'test3') ON CONFLICT (id) DO UPDATE SET name = excluded.name;
+      SQL
+
+      statements = helper.send(:split_sql_statements, sql)
+
+      expect(statements.length).to eq(3)
+      expect(statements[0]).to include('INSERT INTO table1')
+      expect(statements[0]).to include('ON CONFLICT (id) DO NOTHING')
+      expect(statements[1]).to eq('INSERT INTO table2 (id) VALUES (2);')
+      expect(statements[2]).to include('INSERT INTO table3')
+      expect(statements[2]).to include('ON CONFLICT (id) DO UPDATE SET name = excluded.name')
+    end
+  end
+
   describe '#clean_complex_values' do
     let(:helper) { Class.new { include RealDataTests::RSpecHelper }.new }
 
