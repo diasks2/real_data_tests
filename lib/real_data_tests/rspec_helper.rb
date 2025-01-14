@@ -113,29 +113,73 @@ module RealDataTests
     end
 
     def clean_sql_statement(statement)
-      # Extract the ON CONFLICT clause if it exists
-      statement, conflict_clause = extract_conflict_clause(statement)
+      # First, detect if this is an INSERT statement with VALUES
+      if statement =~ /INSERT INTO.*VALUES\s*\(/i
+        # Split the statement into three parts: pre-VALUES, values, and post-VALUES (ON CONFLICT clause)
+        if statement =~ /(.*VALUES\s*\()(.*)(\)\s*(?:ON CONFLICT.*)?;?\s*$)/i
+          pre_values = $1
+          values_content = $2
+          post_values = $3
 
-      # Handle VALUES clause formatting
-      if statement.include?('VALUES')
-        # Split into pre-VALUES and VALUES parts
-        parts = statement.split(/VALUES\s*\(/i, 2)
-        if parts.length == 2
-          # Clean and process the values
-          values = clean_values(parts[1].split(/\)\s*$/)[0])
+          # Clean the values content while preserving complex JSON
+          cleaned_values = clean_complex_values(values_content)
 
-          # Make sure we properly close the VALUES parentheses
-          statement = "#{parts[0]}VALUES (#{values})"
+          # Reassemble the statement
+          statement = "#{pre_values}#{cleaned_values}#{post_values}"
+          statement += ";" unless statement.end_with?(";")
         end
       end
-
-      # Add back the conflict clause if it existed
-      statement = "#{statement}#{conflict_clause ? ' ' + conflict_clause : ''}"
-
-      # Ensure the statement ends with a semicolon
-      statement += ";" unless statement.end_with?(';')
-
       statement
+    end
+
+    def clean_complex_values(values_str)
+      current_value = ''
+      values = []
+      in_quotes = false
+      in_json = false
+      json_brace_count = 0
+
+      chars = values_str.chars
+      i = 0
+      while i < chars.length
+        char = chars[i]
+
+        case char
+        when "'"
+          # Check if this is an escaped quote
+          if i > 0 && chars[i-1] != '\\'
+            in_quotes = !in_quotes
+          end
+          current_value << char
+        when '{'
+          if !in_quotes
+            in_json = true
+            json_brace_count += 1
+          end
+          current_value << char
+        when '}'
+          if !in_quotes
+            json_brace_count -= 1
+            in_json = json_brace_count > 0
+          end
+          current_value << char
+        when ','
+          if !in_quotes && !in_json
+            values << clean_value(current_value.strip)
+            current_value = ''
+          else
+            current_value << char
+          end
+        else
+          current_value << char
+        end
+        i += 1
+      end
+
+      # Add the last value
+      values << clean_value(current_value.strip) unless current_value.strip.empty?
+
+      values.join(', ')
     end
 
     def clean_values(values_str)

@@ -3,14 +3,120 @@ require 'spec_helper'
 
 RSpec.describe RealDataTests::RSpecHelper do
   let(:helper) { Class.new { include RealDataTests::RSpecHelper }.new }
-  let(:complex_settings) do
+  let(:complex_json_settings) do
     '{"billing":{"claim_submission":"","automatic_59_modifier":"1"},' \
     '"print_settings":{"hide_logo_in_header":"0"},' \
+    '"patient_portal_settings":{"patient_invoices":"none"},' \
     '"preferred_payment_types":["private-commercial-insurance","credit-card"]}'
   end
 
   def remove_whitespace(sql)
     sql.gsub(/\s+/, ' ').strip
+  end
+
+  describe '#clean_sql_statement' do
+    it 'handles complex INSERT with JSON and ON CONFLICT' do
+      sql = <<~SQL
+        INSERT INTO organizations (id, name, settings, active, timezone, verified)
+        VALUES ('e50d8052-4481-4246-9502-7f8e5659abcb', 'Test Org', '#{complex_json_settings}', false, 'Eastern Time (US & Canada)', true)
+        ON CONFLICT (id) DO NOTHING;
+      SQL
+
+      cleaned = helper.send(:clean_sql_statement, sql)
+      expect(remove_whitespace(cleaned)).to include("'e50d8052-4481-4246-9502-7f8e5659abcb'")
+      expect(remove_whitespace(cleaned)).to include("'Test Org'")
+      expect(remove_whitespace(cleaned)).to include(complex_json_settings)
+      expect(remove_whitespace(cleaned)).to include("'Eastern Time (US & Canada)'")
+      expect(remove_whitespace(cleaned)).to match(/true\)\s+ON CONFLICT/)
+      expect(remove_whitespace(cleaned)).to match(/DO NOTHING;$/)  # Changed this line
+    end
+
+    it 'preserves nested JSON with commas and quotes' do
+      json_with_commas = '{"values":["first,value", "second,value"]}'
+      sql = <<~SQL
+        INSERT INTO config (id, data)
+        VALUES (1, '#{json_with_commas}')
+        ON CONFLICT (id) DO NOTHING;
+      SQL
+
+      cleaned = helper.send(:clean_sql_statement, sql)
+      expect(cleaned).to include(json_with_commas)
+    end
+
+    it 'handles multiple complex values with various types' do
+      sql = <<~SQL
+        INSERT INTO organizations
+        (id, name, active, config, created_at, count, uuid)
+        VALUES
+        ('1', 'Company, Inc.', true, '{"key": "value"}', '2025-01-14 10:00:00', 42, 'abc-123')
+        ON CONFLICT (id) DO NOTHING;
+      SQL
+
+      cleaned = helper.send(:clean_sql_statement, sql)
+      expect(cleaned).to include("'Company, Inc.'")
+      expect(cleaned).to include("true")
+      expect(cleaned).to include("'2025-01-14 10:00:00'")
+      expect(cleaned).to include("42")
+      expect(cleaned).to include("'abc-123'")
+    end
+
+    it 'handles NULL values correctly in complex statements' do
+      sql = <<~SQL
+        INSERT INTO organizations
+        (id, name, parent_id, config)
+        VALUES
+        ('1', 'Test Corp', NULL, '{"setting": null}')
+        ON CONFLICT (id) DO NOTHING;
+      SQL
+
+      cleaned = helper.send(:clean_sql_statement, sql)
+      expect(cleaned).to include("NULL")
+      expect(cleaned).to include("'Test Corp'")
+      expect(cleaned).to include('{"setting": null}')
+    end
+
+    it 'preserves spacing in complex JSON strings' do
+      json_with_spaces = '{"description": "This is a test with spaces and, commas"}'
+      sql = "INSERT INTO data (id, config) VALUES (1, '#{json_with_spaces}');"
+
+      cleaned = helper.send(:clean_sql_statement, sql)
+      expect(cleaned).to include(json_with_spaces)
+    end
+
+    it 'handles actual production SQL with complex settings' do
+      sql = <<~SQL
+        VALUES ('e50d8052-4481-4246-9502-7f8e5659abcb', 'Hettinger, Stiedemann and White',
+        'Wuckert-Bartoletti', 'fd7pfbe3je79fpp0', NULL, '',
+        '7c4ab8dc-66ef-4617-a7c7-8a0bd49ae909', '761e96fa-ebf8-40b3-842b-8c47901519e0',
+        false, false,
+        '{"billing":{"claim_submission":"","automatic_59_modifier":"1"},"print_settings":{"hide_logo_in_header":"0"},"preferred_payment_types":["private-commercial-insurance","credit-card"]}',
+        false, false, false, 'http://leannon.test/burl_pfeffer',
+        '2023-10-04 16:33:02 UTC', '2024-12-09 17:28:00 UTC', '',
+        'ebumlenoinivyghb.com', false, 'Eastern Time (US & Canada)', true)
+        ON CONFLICT (id) DO NOTHING;
+      SQL
+
+      cleaned = helper.send(:clean_sql_statement, sql)
+      expect(remove_whitespace(cleaned)).to include("'Hettinger, Stiedemann and White'")
+      expect(remove_whitespace(cleaned)).to include("'Eastern Time (US & Canada)'")
+      expect(remove_whitespace(cleaned)).to match(/true\)\s+ON CONFLICT/)
+      expect(remove_whitespace(cleaned)).to match(/DO NOTHING;$/)  # Changed this line
+    end
+  end
+
+  describe '#clean_complex_values' do
+    it 'handles values with nested JSON correctly' do
+      values = "'id123', 'name', '{\"key\": \"value\"}', true"
+      result = helper.send(:clean_complex_values, values)
+      expect(result).to eq("'id123', 'name', '{\"key\": \"value\"}', true")
+    end
+
+    it 'preserves complex JSON structures' do
+      values = "'id', '#{complex_json_settings}', false"
+      result = helper.send(:clean_complex_values, values)
+      expect(result).to include(complex_json_settings)
+      expect(result).to end_with(", false")
+    end
   end
 
   describe '#clean_sql_statement' do
@@ -32,9 +138,9 @@ RSpec.describe RealDataTests::RSpecHelper do
     end
 
     it 'handles complex JSON settings' do
-      sql = "INSERT INTO settings (id, config) VALUES (1, '#{complex_settings}');"
+      sql = "INSERT INTO settings (id, config) VALUES (1, '#{complex_json_settings}');"
       cleaned = helper.send(:clean_sql_statement, sql)
-      expect(cleaned).to include(complex_settings)
+      expect(cleaned).to include(complex_json_settings)
     end
 
     it 'properly quotes UUIDs' do
