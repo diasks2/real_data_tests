@@ -278,6 +278,21 @@ RSpec.describe RealDataTests::RSpecHelper do
       expect(result).to eq("'value1', 'Ratke Group', 'value3'")
     end
 
+    it 'handles complex multi-line INSERT statements with ON CONFLICT clauses' do
+      sql = <<~SQL
+        INSERT INTO organizations (id, name, active)
+        VALUES ('abc-123', 'Test Org', true)
+        ON CONFLICT (id) DO NOTHING;
+        INSERT INTO users (id, email) VALUES ('user-1', 'test@example.com');
+      SQL
+
+      statements = helper.send(:split_sql_statements, sql)
+
+      expect(statements.length).to eq(2)
+      expect(statements[0]).to include('ON CONFLICT (id) DO NOTHING;')
+      expect(statements[1]).to include('INSERT INTO users')
+    end
+
     it 'preserves quoted strings with commas' do
       values = "value1, 'string, with comma', value3"
       result = helper.send(:clean_complex_values, values)

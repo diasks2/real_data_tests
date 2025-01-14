@@ -1,5 +1,38 @@
 module RealDataTests
   module RSpecHelper
+    class SqlBlock
+      attr_reader :type, :content, :table_name
+
+      def initialize(content)
+        @content = content.strip
+        @type = determine_block_type
+        @table_name = extract_table_name if @type == :insert
+      end
+
+      private
+
+      def determine_block_type
+        case @content
+        when /\AINSERT INTO/i
+          :insert
+        when /\ACOPY.*FROM stdin/i
+          :copy
+        when /\AALTER TABLE/i
+          :alter
+        when /\ASET/i
+          :set
+        else
+          :other
+        end
+      end
+
+      def extract_table_name
+        if @content =~ /INSERT INTO\s+"?([^\s"(]+)"?\s/i
+          $1
+        end
+      end
+    end
+
     def load_real_test_data(name)
       dump_path = File.join(RealDataTests.configuration.dump_path, "#{name}.sql")
       raise Error, "Test data file not found: #{dump_path}" unless File.exist?(dump_path)
@@ -17,10 +50,12 @@ module RealDataTests
       end
     end
 
-    # Native Ruby implementation
     def load_real_test_data_native(name)
       dump_path = File.join(RealDataTests.configuration.dump_path, "#{name}.sql")
       raise Error, "Test data file not found: #{dump_path}" unless File.exist?(dump_path)
+
+      sql_content = File.read(dump_path)
+      blocks = parse_sql_blocks(sql_content)
 
       ActiveRecord::Base.transaction do
         connection = ActiveRecord::Base.connection
@@ -29,17 +64,8 @@ module RealDataTests
         connection.execute('SET session_replication_role = replica;')
 
         begin
-          sql_content = File.read(dump_path)
-          statements = split_sql_statements(sql_content)
-
-          statements.each_with_index do |statement, index|
-            begin
-              cleaned_statement = clean_sql_statement(statement)
-              puts "Executing Statement ##{index + 1}: #{cleaned_statement}" # Debug log
-              connection.execute(cleaned_statement)
-            rescue ActiveRecord::StatementInvalid => e
-              raise Error, "Error executing statement ##{index + 1}: #{e.message}\nSQL: #{cleaned_statement}"
-            end
+          blocks.each_with_index do |block, index|
+            execute_block(block, index + 1, blocks.length)
           end
         ensure
           connection.execute('SET session_replication_role = DEFAULT;')
@@ -62,6 +88,78 @@ module RealDataTests
       options << "-d #{config[:database]}"
       options << "-q"
       options.join(" ")
+    end
+
+    def parse_sql_blocks(content)
+      blocks = []
+      current_block = []
+      in_copy_block = false
+
+      content.each_line do |line|
+        line = line.strip
+        next if line.empty? || line.start_with?('--')
+
+        if line.upcase.start_with?('COPY') && line.upcase.include?('FROM stdin')
+          in_copy_block = true
+          current_block << line
+        elsif line == '\.' && in_copy_block
+          in_copy_block = false
+          current_block << line
+          blocks << SqlBlock.new(current_block.join("\n"))
+          current_block = []
+        elsif in_copy_block
+          current_block << line
+        else
+          # Handle regular SQL statements
+          current_block << line
+          if line.end_with?(';') && !in_copy_block
+            blocks << SqlBlock.new(current_block.join("\n"))
+            current_block = []
+          end
+        end
+      end
+
+      # Add any remaining block
+      blocks << SqlBlock.new(current_block.join("\n")) unless current_block.empty?
+      blocks
+    end
+
+    def execute_block(block, index, total)
+      case block.type
+      when :insert
+        execute_insert_block(block, index, total)
+      when :copy
+        execute_copy_block(block, index, total)
+      else
+        execute_regular_block(block, index, total)
+      end
+    end
+
+    def execute_insert_block(block, index, total)
+      puts "Executing INSERT block #{index}/#{total} for table: #{block.table_name}"
+      statement = normalize_insert_statement(block.content)
+      ActiveRecord::Base.connection.execute(statement)
+    end
+
+    def execute_copy_block(block, index, total)
+      puts "Executing COPY block #{index}/#{total}"
+      ActiveRecord::Base.connection.execute(block.content)
+    end
+
+    def execute_regular_block(block, index, total)
+      puts "Executing block #{index}/#{total} of type: #{block.type}"
+      ActiveRecord::Base.connection.execute(block.content)
+    end
+
+    def normalize_insert_statement(statement)
+      # Handle ON CONFLICT clauses properly
+      if statement =~ /(.*?)\s+(ON\s+CONFLICT.*?)\s*;\s*\z/i
+        main_insert = $1
+        conflict_clause = $2
+        "#{main_insert} #{conflict_clause};"
+      else
+        statement
+      end
     end
 
     def split_sql_statements(sql)
@@ -203,43 +301,6 @@ module RealDataTests
       else
         # Handle any other string value, including those with commas
         "'#{value}'" # Other strings
-      end
-    end
-  end
-
-  def import
-    @logger.info "Starting SQL import..."
-
-    ActiveRecord::Base.transaction do
-      begin
-        # Disable foreign key checks and triggers temporarily
-        ActiveRecord::Base.connection.execute('SET session_replication_role = replica;')
-
-        # Split the SQL content into individual statements
-        statements = split_sql_statements(@sql_content)
-
-        statements.each_with_index do |statement, index|
-          next if statement.strip.empty?
-
-          begin
-            @logger.info "Executing statement #{index + 1} of #{statements.length}"
-            cleaned_statement = clean_sql_statement(statement)
-            ActiveRecord::Base.connection.execute(cleaned_statement)
-          rescue ActiveRecord::StatementInvalid => e
-            @logger.error "Error executing statement #{index + 1}: #{e.message}"
-            @logger.error "Statement: #{cleaned_statement[0..100]}..."
-            raise
-          end
-        end
-
-        @logger.info "Successfully imported all SQL statements"
-      rescue StandardError => e
-        @logger.error "Error during import: #{e.message}"
-        @logger.error e.backtrace.join("\n")
-        raise
-      ensure
-        # Re-enable foreign key checks and triggers
-        ActiveRecord::Base.connection.execute('SET session_replication_role = DEFAULT;')
       end
     end
   end
