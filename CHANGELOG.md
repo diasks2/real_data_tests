@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+## [0.3.4] - 2025-01-14
+### Added
+- Alternative native SQL loading method for CI environments
+  - Added `load_real_test_data_native` method that doesn't rely on system commands
+  - Works in restricted environments like GitHub Actions
+  - Uses ActiveRecord's native connection for SQL execution
+  - Maintains same transaction and foreign key handling behavior
+
 ## [0.3.3] - 2025-01-14
 ### Fixed
 - Improved circular dependency handling in PgDumpGenerator for self-referential associations
