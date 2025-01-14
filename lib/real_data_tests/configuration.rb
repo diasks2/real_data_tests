@@ -64,7 +64,7 @@ module RealDataTests
                 :prevent_reciprocal_loading, :anonymization_rules,
                 :prevented_reciprocals
 
-    attr_accessor :max_depth
+    attr_accessor :max_depth, :max_self_ref_depth
 
     def initialize
       @association_filter_mode = nil
@@ -75,6 +75,7 @@ module RealDataTests
       @anonymization_rules = {}
       @prevented_reciprocals = Set.new
       @max_depth = 10
+      @max_self_ref_depth = 2
     end
 
     def prevent_circular_dependency(klass, association_name)

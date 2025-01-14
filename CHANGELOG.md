@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+## [0.3.2] - 2025-01-14
+### Fixed
+- Enhanced association statistics tracking in RecordCollector
+  - Added separate statistics tracking method to ensure accurate counts
+  - Stats are now tracked before circular dependency checks
+  - Fixed parent-child relationship counting in recursive associations
+  - Improved initialization of statistics structures for better reliability
+
 ## [0.3.1] - 2025-01-14
 ### Fixed
 - Fixed circular dependency handling in RecordCollector to correctly limit record collection

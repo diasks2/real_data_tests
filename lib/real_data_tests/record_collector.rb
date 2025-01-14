@@ -10,28 +10,9 @@ module RealDataTests
       @association_path = []
       @current_depth = 0
       @visited_associations = {}
+      @processed_self_refs = Hash.new { |h, k| h[k] = Set.new }
 
-      # Initialize stats for the record's class
-      @collection_stats[record.class.name] = {
-        count: 0,
-        associations: Hash.new(0),
-        polymorphic_types: {}
-      }
-
-      record.class.reflect_on_all_associations(:belongs_to).each do |assoc|
-        if assoc.polymorphic?
-          @collection_stats[record.class.name][:polymorphic_types][assoc.name.to_s] ||= Set.new
-        end
-      end
-
-      puts "\nInitializing RecordCollector for #{record.class.name}##{record.id}"
-      record.class.reflect_on_all_associations(:belongs_to).each do |assoc|
-        if assoc.polymorphic?
-          type = record.public_send("#{assoc.name}_type")
-          id = record.public_send("#{assoc.name}_id")
-          puts "Found polymorphic belongs_to '#{assoc.name}' with type: #{type}, id: #{id}"
-        end
-      end
+      init_collection_stats(record)
     end
 
     def collect
@@ -45,6 +26,20 @@ module RealDataTests
     end
 
     private
+
+    def init_collection_stats(record)
+      @collection_stats[record.class.name] = {
+        count: 0,
+        associations: Hash.new(0),
+        polymorphic_types: {}
+      }
+
+      record.class.reflect_on_all_associations(:belongs_to).each do |assoc|
+        if assoc.polymorphic?
+          @collection_stats[record.class.name][:polymorphic_types][assoc.name.to_s] ||= Set.new
+        end
+      end
+    end
 
     def collect_record(record, depth)
       return if @collected_records.include?(record)
@@ -119,12 +114,18 @@ module RealDataTests
     def should_process_association?(record, association, depth = 0)
       return false if depth >= RealDataTests.configuration.current_preset.max_depth
 
+      # Handle self-referential associations
+      if self_referential_association?(record.class, association)
+        track_key = "#{record.class.name}:#{association.name}"
+        return false if @processed_self_refs[track_key].include?(record.id)
+        @processed_self_refs[track_key].add(record.id)
+      end
+
       association_key = "#{record.class.name}##{record.id}:#{association.name}"
       return false if @processed_associations.include?(association_key)
 
       # Check if the association is allowed by configuration
       should_process = RealDataTests.configuration.current_preset.should_process_association?(record, association.name)
-      puts "  Configuration says: #{should_process}"
 
       if should_process
         @processed_associations.add(association_key)
@@ -138,17 +139,26 @@ module RealDataTests
       @association_path.push(association.name)
 
       begin
+        related_records = fetch_related_records(record, association)
+        count = related_records.length
+
+        # Track statistics even if we're going to skip processing
+        track_association_stats(record.class.name, association.name, count)
+
+        # Check for circular dependency after getting the related records
         if detect_circular_dependency?(record, association)
           puts "    Skipping circular dependency for #{association.name} on #{record.class.name}##{record.id}"
           return
         end
 
-        related_records = fetch_related_records(record, association)
-        count = related_records.length
-        puts "    Found #{count} related #{association.name} records"
-
-        @collection_stats[record.class.name][:associations][association.name.to_s] ||= 0
-        @collection_stats[record.class.name][:associations][association.name.to_s] += count
+        # For self-referential associations, check depth
+        if self_referential_association?(record.class, association)
+          max_self_ref_depth = 2  # Default max depth for self-referential associations
+          if depth >= max_self_ref_depth
+            puts "    Reached max self-referential depth for #{association.name}"
+            return
+          end
+        end
 
         related_records.each { |related_record| collect_record(related_record, depth + 1) }
       rescue => e
@@ -158,10 +168,30 @@ module RealDataTests
       end
     end
 
+    def track_association_stats(class_name, association_name, count)
+      # Initialize stats for this class if not already done
+      @collection_stats[class_name] ||= {
+        count: 0,
+        associations: Hash.new(0),
+        polymorphic_types: {}
+      }
+
+      # Update the association count
+      @collection_stats[class_name][:associations][association_name.to_s] ||= 0
+      @collection_stats[class_name][:associations][association_name.to_s] += count
+    end
+
     def self_referential_association?(klass, association)
       return false unless association.options[:class_name]
       return false if association.polymorphic?
-      association.options[:class_name] == klass.name
+
+      target_class_name = if association.options[:class_name].is_a?(String)
+        association.options[:class_name]
+      else
+        association.options[:class_name].name
+      end
+
+      klass.name == target_class_name
     end
 
     def detect_circular_dependency?(record, association)
@@ -170,6 +200,11 @@ module RealDataTests
 
       target_class = association.klass
       return false unless target_class
+
+      if self_referential_association?(record.class, association)
+        track_key = "#{target_class.name}:#{association.name}"
+        return @processed_self_refs[track_key].include?(record.id)
+      end
 
       path_key = "#{target_class.name}:#{association.name}"
       visited_count = @association_path.count { |assoc| "#{target_class.name}:#{assoc}" == path_key }
