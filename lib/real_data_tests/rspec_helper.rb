@@ -180,7 +180,7 @@ module RealDataTests
     end
 
     def execute_insert_block(block, index, total)
-      puts "Executing INSERT block #{index}/#{total} for table: #{block.table_name}"
+      # puts "Executing INSERT block #{index}/#{total} for table: #{block.table_name}"
       # Don't modify statements that already end with semicolon
       statement = if block.content.strip.end_with?(';')
         block.content
@@ -202,12 +202,12 @@ module RealDataTests
     end
 
     def execute_copy_block(block, index, total)
-      puts "Executing COPY block #{index}/#{total}"
+      # puts "Executing COPY block #{index}/#{total}"
       ActiveRecord::Base.connection.execute(block.content)
     end
 
     def execute_regular_block(block, index, total)
-      puts "Executing block #{index}/#{total} of type: #{block.type}"
+      # puts "Executing block #{index}/#{total} of type: #{block.type}"
       ActiveRecord::Base.connection.execute(block.content)
     end
 

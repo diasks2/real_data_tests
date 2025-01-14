@@ -1,46 +1,6 @@
 ## [Unreleased]
 
-## [0.3.10] - 2025-01-14
-### Fixed
-- Enhanced SQL statement parsing in native loader
-  - Improved handling of complex ON CONFLICT clauses with multiple closing parentheses
-  - Fixed spacing issues between VALUES and ON CONFLICT clauses
-  - Enhanced regex pattern for more precise conflict clause extraction
-  - Added proper statement reassembly for complex SQL structures
-
-## [0.3.9] - 2025-01-14
-### Fixed
-- Enhanced SQL statement parsing in native loader
-  - Improved handling of complex ON CONFLICT clauses with multiple closing parentheses
-  - Fixed spacing issues between VALUES and ON CONFLICT clauses
-  - Enhanced regex pattern for more precise conflict clause extraction
-  - Added proper statement reassembly for complex SQL structures
-
-## [0.3.8] - 2025-01-14
-### Fixed
-- Enhanced SQL statement parsing in native loader
-  - Improved handling of complex ON CONFLICT clauses with multiple closing parentheses
-  - Fixed spacing issues between VALUES and ON CONFLICT clauses
-  - Enhanced regex pattern for more precise conflict clause extraction
-  - Added proper statement reassembly for complex SQL structures
-
-## [0.3.7] - 2025-01-14
-### Fixed
-- Corrected SQL value handling in native loader
-  - Fixed boolean value handling, particularly at the end of VALUES clauses
-  - Improved handling of NULL values and numbers
-  - Added proper whitespace cleaning for values
-  - Enhanced value type detection for correct quoting
-
-## [0.3.6] - 2025-01-14
-### Fixed
-- Further enhanced SQL statement handling in native loader
-  - Fixed handling of SQL statements with ON CONFLICT clauses
-  - Improved quoting for company names containing spaces
-  - Added proper handling of trailing semicolons
-  - Enhanced detection and preservation of SQL statement structure
-
-## [0.3.5] - 2025-01-14
+## [0.3.5 - 0.3.17] - 2025-01-14
 ### Fixed
 - Enhanced SQL statement handling in native loader
   - Added proper UUID value quoting in VALUES clauses
