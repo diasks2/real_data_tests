@@ -61,7 +61,10 @@ module RealDataTests
   class PresetConfig
     attr_reader :association_filter_mode, :association_filter_list,
                 :model_specific_associations, :association_limits,
-                :prevent_reciprocal_loading, :anonymization_rules
+                :prevent_reciprocal_loading, :anonymization_rules,
+                :prevented_reciprocals
+
+    attr_accessor :max_depth
 
     def initialize
       @association_filter_mode = nil
@@ -70,6 +73,26 @@ module RealDataTests
       @association_limits = {}
       @prevent_reciprocal_loading = {}
       @anonymization_rules = {}
+      @prevented_reciprocals = Set.new
+      @max_depth = 10
+    end
+
+    def prevent_circular_dependency(klass, association_name)
+      key = if klass.is_a?(String)
+        "#{klass}:#{association_name}"
+      else
+        "#{klass.name}:#{association_name}"
+      end
+      @prevented_reciprocals << key
+    end
+
+    def has_circular_dependency?(klass, association_name)
+      key = if klass.is_a?(String)
+        "#{klass}:#{association_name}"
+      else
+        "#{klass.name}:#{association_name}"
+      end
+      @prevented_reciprocals.include?(key)
     end
 
     def include_associations(*associations)
@@ -109,7 +132,7 @@ module RealDataTests
 
     def prevent_reciprocal?(record_class, association_name)
       path = "#{record_class.name}.#{association_name}"
-      @prevent_reciprocal_loading[path]
+      @prevent_reciprocal_loading[path] || has_circular_dependency?(record_class, association_name)
     end
 
     def prevent_reciprocal(path)

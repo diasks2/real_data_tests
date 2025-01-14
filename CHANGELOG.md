@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+## [0.3.1] - 2025-01-14
+### Fixed
+- Fixed circular dependency handling in RecordCollector to correctly limit record collection
+  - Moved prevention logic earlier in the collection process to stop circular dependencies before record collection
+  - Improved tracking of visited associations for more accurate prevention
+  - Added better logging for dependency prevention decisions
+  - Fixed test case for circular dependency prevention in nested associations
+
 ## [0.3.0] - 2025-01-13
 ### Added
 - **Polymorphic Association Support**:
