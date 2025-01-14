@@ -203,30 +203,30 @@ RSpec.describe RealDataTests::RSpecHelper do
     end
   end
 
-  describe '#clean_values' do
+  describe '#clean_complex_values' do
     let(:helper) { Class.new { include RealDataTests::RSpecHelper }.new }
 
     it 'correctly handles values with spaces' do
       values = "value1, 'Ratke Group', value3"
-      result = helper.send(:clean_values, values)
+      result = helper.send(:clean_complex_values, values)
       expect(result).to eq("'value1', 'Ratke Group', 'value3'")
     end
 
     it 'preserves quoted strings with commas' do
       values = "value1, 'string, with comma', value3"
-      result = helper.send(:clean_values, values)
+      result = helper.send(:clean_complex_values, values)
       expect(result).to eq("'value1', 'string, with comma', 'value3'")
     end
 
     it 'handles nested JSON objects' do
       values = "value1, '{\"key\": \"value, with comma\"}', value3"
-      result = helper.send(:clean_values, values)
+      result = helper.send(:clean_complex_values, values)
       expect(result).to eq("'value1', '{\"key\": \"value, with comma\"}', 'value3'")
     end
 
     it 'preserves boolean values without quotes' do
       values = "true, false, 'string'"
-      result = helper.send(:clean_values, values)
+      result = helper.send(:clean_complex_values, values)
       expect(result).to eq("true, false, 'string'")
     end
   end

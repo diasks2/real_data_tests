@@ -17,7 +17,7 @@ module RealDataTests
       end
     end
 
-    # New method that doesn't rely on system commands
+    # Native Ruby implementation
     def load_real_test_data_native(name)
       dump_path = File.join(RealDataTests.configuration.dump_path, "#{name}.sql")
       raise Error, "Test data file not found: #{dump_path}" unless File.exist?(dump_path)
@@ -202,38 +202,42 @@ module RealDataTests
         "'#{value}'" # Other strings
       end
     end
+  end
 
-    def clean_values(values_str)
-      values = []
-      current_value = ''
-      in_quotes = false
-      nested_level = 0
+  def import
+    @logger.info "Starting SQL import..."
 
-      values_str.chars.each do |char|
-        case char
-        when "'"
-          in_quotes = !in_quotes
-          current_value << char
-        when '{'
-          nested_level += 1
-          current_value << char
-        when '}'
-          nested_level -= 1
-          current_value << char
-        when ','
-          if !in_quotes && nested_level == 0
-            values << clean_value(current_value.strip)
-            current_value = ''
-          else
-            current_value << char
+    ActiveRecord::Base.transaction do
+      begin
+        # Disable foreign key checks and triggers temporarily
+        ActiveRecord::Base.connection.execute('SET session_replication_role = replica;')
+
+        # Split the SQL content into individual statements
+        statements = split_sql_statements(@sql_content)
+
+        statements.each_with_index do |statement, index|
+          next if statement.strip.empty?
+
+          begin
+            @logger.info "Executing statement #{index + 1} of #{statements.length}"
+            cleaned_statement = clean_sql_statement(statement)
+            ActiveRecord::Base.connection.execute(cleaned_statement)
+          rescue ActiveRecord::StatementInvalid => e
+            @logger.error "Error executing statement #{index + 1}: #{e.message}"
+            @logger.error "Statement: #{cleaned_statement[0..100]}..."
+            raise
           end
-        else
-          current_value << char
         end
-      end
 
-      values << clean_value(current_value.strip)
-      values.join(', ')
+        @logger.info "Successfully imported all SQL statements"
+      rescue StandardError => e
+        @logger.error "Error during import: #{e.message}"
+        @logger.error e.backtrace.join("\n")
+        raise
+      ensure
+        # Re-enable foreign key checks and triggers
+        ActiveRecord::Base.connection.execute('SET session_replication_role = DEFAULT;')
+      end
     end
   end
 end
