@@ -3,7 +3,6 @@
 - Fixed cross-model circular dependency handling in PgDumpGenerator
   - The `prevent_circular_dependency` method previously only worked for self-referential associations (e.g., `ServiceRate → ServiceRate`) due to a guard clause (`assoc.klass == model`) in `build_dependency_graph`
   - Removed the self-referential constraint so `prevent_circular_dependency` now correctly breaks cycles between different models (e.g., `Organization → User → Organization`)
-  - This bug was latent and became visible in Ruby 3.2.10 due to changes in hash/set iteration ordering that altered association traversal order
 
 ## [0.3.5 - 0.3.17] - 2025-01-14
 ### Fixed
