@@ -38,8 +38,6 @@ module RealDataTests
         direct_dependencies = model.reflect_on_all_associations(:belongs_to)
           .reject(&:polymorphic?) # Skip polymorphic associations
           .reject do |assoc|
-            # Skip self-referential associations that are configured to prevent circular deps
-            assoc.klass == model &&
             RealDataTests.configuration.current_preset.prevent_reciprocal?(model, assoc.name)
           end
           .map(&:klass)
