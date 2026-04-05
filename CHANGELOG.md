@@ -1,3 +1,10 @@
+## [0.4.0] - 2026-04-06
+### Added
+- **Bypass Default Scope Support**:
+  - New `bypass_default_scope` configuration option for presets
+  - When enabled, unscopes `default_scope` from all defined models during record collection
+  - Ensures soft-deleted and other normally-hidden records are captured, preventing orphaned foreign key references in fixtures
+
 ## [0.3.18] - 2025-02-05
 ### Fixed
 - Fixed cross-model circular dependency handling in PgDumpGenerator
