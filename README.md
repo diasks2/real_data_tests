@@ -329,6 +329,29 @@ RealDataTests.configure do |config|
 end
 ```
 
+### Bypassing Default Scopes
+
+Rails models sometimes define a `default_scope` that excludes certain records, such as soft-deleted ones:
+
+```ruby
+class VisitNote < ApplicationRecord
+  default_scope { where(deleted_at: nil) }
+end
+```
+
+By default, Real Data Tests respects these scopes, meaning soft-deleted records won't be included in your dumps. Since SQL fixtures should mirror what actually exists in the database, you can bypass default scopes to ensure all records are captured:
+
+```ruby
+RealDataTests.configure do |config|
+  config.preset :patient_data do |p|
+    p.bypass_default_scope
+
+    p.include_associations_for 'Patient', :visit_notes
+    p.include_associations_for 'VisitNote', :patient
+  end
+end
+```
+
 ### Best Practices for Association Control
 
 1. **Start with Global Rules**: Define global association rules that apply to most models

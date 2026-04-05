@@ -74,8 +74,17 @@ module RealDataTests
       @prevent_reciprocal_loading = {}
       @anonymization_rules = {}
       @prevented_reciprocals = Set.new
+      @bypass_default_scope = false
       @max_depth = 10
       @max_self_ref_depth = 2
+    end
+
+    def bypass_default_scope(value = true)
+      @bypass_default_scope = value
+    end
+
+    def bypass_default_scope?
+      @bypass_default_scope
     end
 
     def prevent_circular_dependency(klass, association_name)

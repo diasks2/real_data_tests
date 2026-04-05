@@ -61,11 +61,11 @@ module RealDataTests
       record.class.reflect_on_all_associations(:belongs_to).each do |assoc|
         next unless assoc.polymorphic?
 
-        type = record.public_send("#{assoc.name}_type")
+        type = record.public_send(assoc.foreign_type)
         @collection_stats[record.class.name][:polymorphic_types][assoc.name.to_sym] ||= Set.new
 
         begin
-          associated_record = record.public_send(assoc.name)
+          associated_record = load_association(record, assoc)
           if associated_record
             puts "  Adding polymorphic type '#{type}' for #{assoc.name}"
             @collection_stats[record.class.name][:polymorphic_types][assoc.name.to_sym] << associated_record.class.name
@@ -215,9 +215,9 @@ module RealDataTests
     def fetch_related_records(record, association)
       case association.macro
       when :belongs_to, :has_one
-        Array(record.public_send(association.name)).compact
+        Array(load_association(record, association)).compact
       when :has_many, :has_and_belongs_to_many
-        relation = record.public_send(association.name)
+        relation = load_association(record, association)
 
         if limit = RealDataTests.configuration.current_preset.get_association_limit(record.class, association.name)
           puts "    Applying configured limit of #{limit} records for #{record.class.name}.#{association.name}"
@@ -227,6 +227,44 @@ module RealDataTests
         relation
       else
         []
+      end
+    end
+
+    def load_association(record, association)
+      if RealDataTests.configuration.current_preset.bypass_default_scope?
+        load_association_unscoped(record, association)
+      else
+        record.public_send(association.name)
+      end
+    end
+
+    def load_association_unscoped(record, association)
+      if association.polymorphic?
+        type_value = record.public_send(association.foreign_type)
+        id_value = record.public_send(association.foreign_key)
+        return nil if type_value.blank? || id_value.blank?
+        klass = type_value.constantize
+        klass.unscoped.find_by(klass.primary_key => id_value)
+      else
+        case association.macro
+        when :belongs_to, :has_one
+          # If the association was loaded at any point before the collector runs, reset it so that the
+          # default scopes are properly bypassed.
+          record.association(association.name).reset
+          without_default_scope(association) { record.public_send(association.name) }
+        when :has_many, :has_and_belongs_to_many
+          without_default_scope(association) { record.public_send(association.name).to_a }
+        end
+      end
+    end
+
+    def without_default_scope(association)
+      if association.through_reflection?
+        association.through_reflection.klass.unscoped do
+          association.klass.unscoped { yield }
+        end
+      else
+        association.klass.unscoped { yield }
       end
     end
 
