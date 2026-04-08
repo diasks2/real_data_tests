@@ -25,13 +25,13 @@ RSpec.describe RealDataTests::PgDumpGenerator do
 
           def self.columns_hash
             {
-              'id' => OpenStruct.new(
+              'id' => Struct.new(:name, :type, :sql_type, :array, keyword_init: true).new(
                 name: 'id',
                 type: :integer,
                 sql_type: 'integer',
                 array: false
               ),
-              'service_history_log_data' => OpenStruct.new(
+              'service_history_log_data' => Struct.new(:name, :type, :sql_type, :array, keyword_init: true).new(
                 name: 'service_history_log_data',
                 type: :jsonb,
                 sql_type: 'jsonb',
@@ -97,6 +97,69 @@ RSpec.describe RealDataTests::PgDumpGenerator do
         expect(sql).to include("(id, service_history_log_data)")
         expect(sql).to include("VALUES (1, '{}')")
         expect(sql).to include("ON CONFLICT (id) DO NOTHING")
+      end
+    end
+
+    context 'with datetime fields' do
+      before(:all) do
+        class MockEvent
+          attr_reader :id, :starts_at
+
+          def initialize(id, starts_at)
+            @id = id
+            @starts_at = starts_at
+          end
+
+          def self.table_name
+            'events'
+          end
+
+          def self.column_names
+            ['id', 'starts_at']
+          end
+
+          def self.columns_hash
+            {
+              'id' => Struct.new(:name, :type, :sql_type, :array, keyword_init: true).new(
+                name: 'id',
+                type: :integer,
+                sql_type: 'integer',
+                array: false
+              ),
+              'starts_at' => Struct.new(:name, :type, :sql_type, :array, keyword_init: true).new(
+                name: 'starts_at',
+                type: :datetime,
+                sql_type: 'timestamp without time zone',
+                array: false
+              )
+            }
+          end
+
+          def self.reflect_on_all_associations(macro = nil)
+            []
+          end
+
+          def self.defined_enums
+            {}
+          end
+
+          def [](name)
+            instance_variable_get("@#{name}")
+          end
+        end
+      end
+
+      after(:all) do
+        Object.send(:remove_const, :MockEvent) if defined?(MockEvent)
+      end
+
+      it 'preserves millisecond precision for datetime values' do
+        time_with_microseconds = Time.utc(2026, 1, 15, 10, 30, Rational(45_123456, 1_000_000))
+        record = MockEvent.new(1, time_with_microseconds)
+        generator = described_class.new([record])
+        sql = generator.generate
+
+        expect(sql).to include('2026-01-15 10:30:45.123456 UTC')
       end
     end
   end

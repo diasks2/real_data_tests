@@ -151,6 +151,8 @@ module RealDataTests
         end
       when :array
         parse_and_format_array(value, column_info[:sql_type])
+      when :datetime
+        sanitize_string(value.utc.strftime("%Y-%m-%d %H:%M:%S.%6N UTC"))
       else
         if column_info[:array]
           parse_and_format_array(value, column_info[:sql_type])
