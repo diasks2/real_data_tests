@@ -1,3 +1,9 @@
+## [0.4.1] - 2026-04-09
+### Fixed
+- Fixed `datetime` microsecond precision loss in `PgDumpGenerator`
+  - `datetime` columns previously fell through to the default string conversion (`Time#to_s`), dropping sub-second precision
+  - Added explicit `:datetime` handling that emits values via `strftime("%Y-%m-%d %H:%M:%S.%6N UTC")` to preserve microseconds
+
 ## [0.4.0] - 2026-04-06
 ### Added
 - **Bypass Default Scope Support**:
