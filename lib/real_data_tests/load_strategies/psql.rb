@@ -7,15 +7,16 @@ module RealDataTests
     # NOT participate in the caller's transaction (a transaction is
     # per-connection; a child process can never join it).
     #
-    # Use this only when the dump requires psql itself — e.g. psql
-    # meta-commands (\set, \connect) or dumps too large to read into memory.
-    # For everything else, prefer the (default) Native strategy.
+    # This is the default strategy of load_real_test_data. Prefer the Native
+    # strategy (load_real_test_data_native) unless the dump requires psql
+    # itself — e.g. psql meta-commands (\set, \connect) or dumps too large to
+    # read into memory.
     class Psql < Base
       def call(dump_path)
         # Load the SQL dump quietly. Note: no transaction or
         # session_replication_role handling here — psql runs on its own
         # Postgres session, so nothing set on the ActiveRecord connection
-        # (as pre-0.5 versions did) can affect the load.
+        # can affect the load.
         result = system("psql #{connection_options} -q < #{dump_path}")
         raise Error, "Failed to load test data: #{dump_path}" unless result
       end
