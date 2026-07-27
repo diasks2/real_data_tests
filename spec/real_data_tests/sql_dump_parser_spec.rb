@@ -1,7 +1,7 @@
 require 'spec_helper'
 
 RSpec.describe RealDataTests::SqlDumpParser do
-  let(:parser) { described_class.new }
+  let(:parser) { described_class }
 
   describe 'SqlBlock' do
     let(:sql_block) { parser.parse(sql_content).first }

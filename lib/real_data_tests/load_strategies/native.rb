@@ -22,7 +22,7 @@ module RealDataTests
 
           begin
             if sql_content.match?(/^COPY .* FROM stdin/i)
-              blocks = SqlDumpParser.new.parse(sql_content)
+              blocks = SqlDumpParser.parse(sql_content)
               blocks.each_with_index do |block, index|
                 execute_block(block, index + 1, blocks.length)
               end

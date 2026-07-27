@@ -40,7 +40,7 @@ module RealDataTests
     end
 
     # Returns an array of SqlBlock in dump order.
-    def parse(content)
+    def self.parse(content)
       blocks = []
       current_block = []
       in_copy_block = false
