@@ -245,6 +245,36 @@ RSpec.describe "Blog" do
 end
 ```
 
+### 3. Load Strategies
+
+`load_real_test_data` accepts a strategy that controls how the dump is executed:
+
+```ruby
+# Default: shells out to psql. Data commits on a separate connection,
+# outside any test transaction. Supports psql meta-commands (\set, \connect).
+load_real_test_data("active_user_with_posts")
+
+# Native: executes on the ActiveRecord connection, so the data joins the
+# caller's transaction (e.g. DatabaseCleaner's :transaction strategy) and
+# rolls back with it.
+load_real_test_data("active_user_with_posts", strategy: RealDataTests::LoadStrategies::Native)
+
+# Shorthand for the Native strategy:
+load_real_test_data_native("active_user_with_posts")
+```
+
+Custom strategies subclass `RealDataTests::LoadStrategies::Base` and implement `#call(dump_path)`:
+
+```ruby
+class MyStrategy < RealDataTests::LoadStrategies::Base
+  def call(dump_path)
+    # execute the dump however you like
+  end
+end
+
+load_real_test_data("active_user_with_posts", strategy: MyStrategy)
+```
+
 ## Association Control
 
 Real Data Tests provides several ways to control how associations are collected and loaded.
