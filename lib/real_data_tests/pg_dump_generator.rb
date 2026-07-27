@@ -297,21 +297,5 @@ module RealDataTests
     def sanitize_string(str)
       "'#{str.gsub("'", "''")}'"
     end
-
-    def connection_options
-      config = if ActiveRecord::Base.respond_to?(:connection_db_config)
-        ActiveRecord::Base.connection_db_config.configuration_hash
-      else
-        ActiveRecord::Base.connection_config
-      end
-
-      options = []
-      options << "-h #{config[:host]}" if config[:host]
-      options << "-p #{config[:port]}" if config[:port]
-      options << "-U #{config[:username]}" if config[:username]
-      options << "-d #{config[:database]}"
-      options << "-q"  # Run quietly
-      options.join(" ")
-    end
   end
 end
