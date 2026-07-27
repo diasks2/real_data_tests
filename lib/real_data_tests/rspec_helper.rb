@@ -13,6 +13,16 @@ module RealDataTests
       strategy.call(dump_path)
     end
 
+    # Loads a SQL dump on the ActiveRecord connection
+    # (LoadStrategies::Native), so the data participates in the caller's
+    # transaction (e.g. DatabaseCleaner's :transaction strategy) and rolls
+    # back with it. Shorthand for:
+    #
+    #   load_real_test_data(name, strategy: RealDataTests::LoadStrategies::Native)
+    #
+    # Unlike the default psql strategy, this never commits outside the test
+    # transaction, but it cannot process psql meta-commands (e.g. \set) and
+    # reads the whole dump into memory.
     def load_real_test_data_native(name)
       load_real_test_data(name, strategy: LoadStrategies::Native)
     end
