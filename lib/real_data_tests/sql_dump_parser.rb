@@ -5,40 +5,6 @@ module RealDataTests
   # block each (terminated by ";"); COPY ... FROM stdin blocks span from the
   # COPY line through the "\." terminator, preserving the data lines between.
   class SqlDumpParser
-    # A single parsed block of the dump, tagged with its statement type.
-    class SqlBlock
-      attr_reader :type, :content, :table_name
-
-      def initialize(content)
-        @content = content.strip
-        @type = determine_block_type
-        @table_name = extract_table_name if @type == :insert
-      end
-
-      private
-
-      def determine_block_type
-        case @content
-        when /\AINSERT INTO/i
-          :insert
-        when /\ACOPY.*FROM stdin/i
-          :copy
-        when /\AALTER TABLE/i
-          :alter
-        when /\ASET/i
-          :set
-        else
-          :other
-        end
-      end
-
-      def extract_table_name
-        if @content =~ /INSERT INTO\s+"?([^\s"(]+)"?\s/i
-          $1
-        end
-      end
-    end
-
     # Returns an array of SqlBlock in dump order.
     def self.parse(content)
       blocks = []
@@ -84,6 +50,40 @@ module RealDataTests
       # Handle any remaining block
       blocks << SqlBlock.new(current_block.join("\n")) unless current_block.empty?
       blocks
+    end
+
+    # A single parsed block of the dump, tagged with its statement type.
+    class SqlBlock
+      attr_reader :type, :content, :table_name
+
+      def initialize(content)
+        @content = content.strip
+        @type = determine_block_type
+        @table_name = extract_table_name if @type == :insert
+      end
+
+      private
+
+      def determine_block_type
+        case @content
+        when /\AINSERT INTO/i
+          :insert
+        when /\ACOPY.*FROM stdin/i
+          :copy
+        when /\AALTER TABLE/i
+          :alter
+        when /\ASET/i
+          :set
+        else
+          :other
+        end
+      end
+
+      def extract_table_name
+        if @content =~ /INSERT INTO\s+"?([^\s"(]+)"?\s/i
+          $1
+        end
+      end
     end
   end
 end
