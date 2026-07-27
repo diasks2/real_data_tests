@@ -124,5 +124,57 @@ RSpec.describe RealDataTests::RSpecHelper, 'data loading' do
 
   describe '#load_real_test_data' do
     include_examples 'a transactional loader', :load_real_test_data
+
+    it 'accepts a strategy via dependency injection' do
+      write_fixture('insert_dump', INSERT_DUMP)
+      helper.load_real_test_data('insert_dump', strategy: RealDataTests::LoadStrategies::Native)
+      expect(record_count).to eq(2)
+    end
+
+    it 'passes the dump path to the injected strategy' do
+      write_fixture('insert_dump', INSERT_DUMP)
+      strategy = double('strategy')
+      expect(strategy).to receive(:call).with(File.join(@dump_dir, 'insert_dump.sql'))
+      helper.load_real_test_data('insert_dump', strategy: strategy)
+    end
+
+    it 'raises before invoking the strategy when the file is missing' do
+      strategy = double('strategy')
+      expect(strategy).not_to receive(:call)
+      expect {
+        helper.load_real_test_data('nope', strategy: strategy)
+      }.to raise_error(RealDataTests::Error, /Test data file not found/)
+    end
+  end
+
+  describe 'with the Psql strategy' do
+    let(:database) { ENV.fetch('PGDATABASE', 'real_data_tests_test') }
+
+    def psql(sql)
+      `psql -d #{database} -t -A -q -c "#{sql}" 2>&1`.strip
+    end
+
+    before(:each) do
+      psql('CREATE TABLE IF NOT EXISTS rdt_psql_records (id text PRIMARY KEY, name text);')
+    end
+
+    after(:each) do
+      psql('DROP TABLE IF EXISTS rdt_psql_records;')
+    end
+
+    it 'loads the dump via psql, committing outside the caller transaction' do
+      write_fixture('psql_dump', "INSERT INTO rdt_psql_records (id, name) VALUES ('1', 'Alpha');\n")
+      helper.load_real_test_data('psql_dump', strategy: RealDataTests::LoadStrategies::Psql)
+      expect(psql('SELECT COUNT(*) FROM rdt_psql_records')).to eq('1')
+    end
+
+    it 'supports psql meta-commands in the dump' do
+      write_fixture('meta_dump', <<~SQL)
+        \\set record_name Alpha
+        INSERT INTO rdt_psql_records (id, name) VALUES ('1', :'record_name');
+      SQL
+      helper.load_real_test_data('meta_dump', strategy: RealDataTests::LoadStrategies::Psql)
+      expect(psql("SELECT name FROM rdt_psql_records WHERE id = '1'")).to eq('Alpha')
+    end
   end
 end

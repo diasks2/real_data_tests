@@ -1,7 +1,7 @@
 require 'spec_helper'
 
 RSpec.describe RealDataTests::RSpecHelper do
-  let(:helper) { Class.new { include RealDataTests::RSpecHelper }.new }
+  let(:helper) { RealDataTests::LoadStrategies::Native.new }
 
   describe 'SqlBlock' do
     let(:sql_block) { helper.send(:parse_sql_blocks, sql_content).first }

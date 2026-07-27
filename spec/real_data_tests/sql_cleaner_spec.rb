@@ -2,7 +2,7 @@
 require 'spec_helper'
 
 RSpec.describe RealDataTests::RSpecHelper do
-  let(:helper) { Class.new { include RealDataTests::RSpecHelper }.new }
+  let(:helper) { RealDataTests::LoadStrategies::Native.new }
   let(:complex_json_settings) do
     '{"billing":{"claim_submission":"","automatic_59_modifier":"1"},' \
     '"print_settings":{"hide_logo_in_header":"0"},' \
@@ -270,7 +270,6 @@ RSpec.describe RealDataTests::RSpecHelper do
   end
 
   describe '#clean_complex_values' do
-    let(:helper) { Class.new { include RealDataTests::RSpecHelper }.new }
 
     it 'correctly handles values with spaces' do
       values = "value1, 'Ratke Group', value3"

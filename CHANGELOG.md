@@ -1,12 +1,15 @@
 ## [Unreleased]
-### Changed
-- `load_real_test_data_native` now executes dumps without `COPY ... FROM stdin` blocks as a single multi-statement `execute` (one server round-trip) instead of parsing and executing block-by-block; block parsing is kept only as the COPY fallback
-- `load_real_test_data` no longer shells out to `psql` — it is now an alias of `load_real_test_data_native` and runs on the ActiveRecord connection, so loaded data participates in the caller's transaction (e.g. DatabaseCleaner `:transaction` strategy) and rolls back with it
-  - **Breaking**: data loaded via `load_real_test_data` previously committed outside the test transaction; anything relying on that leak (or on psql meta-commands in dumps, e.g. `\connect`) will now behave differently. The `COPY` terminator `\.` is still handled.
-- `COPY ... FROM stdin` blocks are now streamed through `raw_connection.copy_data` on the same libpq session, so COPY data is transactional too
+### Added
+- **Load strategies**: SQL dump loading is now pluggable via `RealDataTests::LoadStrategies`
+  - `LoadStrategies::Native` (default) — loads on the ActiveRecord connection
+  - `LoadStrategies::Psql` — the previous `psql` shell-out behavior, for dumps that require psql itself (meta-commands like `\set`, or dumps too large to read into memory)
+  - Inject via `load_real_test_data("dump", strategy: RealDataTests::LoadStrategies::Psql)`
 
-### Removed
-- `connection_options` (psql CLI argument builder) — no longer needed without the shell-out
+### Changed
+- `load_real_test_data` now defaults to the `Native` strategy: it runs on the ActiveRecord connection, so loaded data participates in the caller's transaction (e.g. DatabaseCleaner `:transaction` strategy) and rolls back with it
+  - **Breaking**: data previously committed outside the test transaction via the psql subprocess; anything relying on that leak now needs `strategy: LoadStrategies::Psql` explicitly
+- Dumps without `COPY ... FROM stdin` blocks are executed as a single multi-statement `execute` (one server round-trip) instead of parsed and executed block-by-block; block parsing is kept only as the COPY fallback
+- `COPY ... FROM stdin` blocks are streamed through `raw_connection.copy_data` on the same libpq session, so COPY data is transactional too (previously broken in the native loader, which sent the whole COPY block through `execute`)
 
 ## [0.4.1] - 2026-04-09
 ### Fixed
