@@ -13,29 +13,30 @@ module RealDataTests
     # read into memory.
     class Psql < Base
       def call(dump_path)
-        # Load the SQL dump quietly. Note: no transaction or
-        # session_replication_role handling here — psql runs on its own
-        # Postgres session, so nothing set on the ActiveRecord connection
-        # can affect the load.
-        result = system("psql #{connection_options} -q < #{dump_path}")
+        # Load the SQL dump quietly. Invoked without a shell (argv array +
+        # :in redirect), so paths and connection values need no escaping.
+        # Note: no transaction or session_replication_role handling here —
+        # psql runs on its own Postgres session, so nothing set on the
+        # ActiveRecord connection can affect the load.
+        result = system('psql', *connection_args, in: dump_path)
         raise Error, "Failed to load test data: #{dump_path}" unless result
       end
 
       private
 
-      def connection_options
+      def connection_args
         config = if ActiveRecord::Base.respond_to?(:connection_db_config)
           ActiveRecord::Base.connection_db_config.configuration_hash
         else
           ActiveRecord::Base.connection_config
         end
-        options = []
-        options << "-h #{config[:host]}" if config[:host]
-        options << "-p #{config[:port]}" if config[:port]
-        options << "-U #{config[:username]}" if config[:username]
-        options << "-d #{config[:database]}"
-        options << "-q"
-        options.join(" ")
+        args = []
+        args += ['-h', config[:host].to_s] if config[:host]
+        args += ['-p', config[:port].to_s] if config[:port]
+        args += ['-U', config[:username].to_s] if config[:username]
+        args += ['-d', config[:database].to_s]
+        args << '-q'
+        args
       end
     end
   end

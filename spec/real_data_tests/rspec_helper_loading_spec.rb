@@ -185,6 +185,16 @@ RSpec.describe RealDataTests::RSpecHelper, 'data loading' do
       expect(psql('SELECT COUNT(*) FROM rdt_psql_records')).to eq('1')
     end
 
+    it 'handles dump paths containing spaces and shell metacharacters' do
+      dir = File.join(@dump_dir, "with space'and quote")
+      Dir.mkdir(dir)
+      File.write(File.join(dir, 'space_dump.sql'), "INSERT INTO rdt_psql_records (id, name) VALUES ('1', 'Alpha');\n")
+      RealDataTests.configuration.dump_path = dir
+
+      helper.load_real_test_data('space_dump')
+      expect(psql('SELECT COUNT(*) FROM rdt_psql_records')).to eq('1')
+    end
+
     it 'supports psql meta-commands in the dump' do
       write_fixture('meta_dump', <<~SQL)
         \\set record_name Alpha
