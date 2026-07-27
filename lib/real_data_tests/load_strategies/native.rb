@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module RealDataTests
   module LoadStrategies
     # Loads a SQL dump on the ActiveRecord connection, so the data
@@ -188,7 +190,7 @@ module RealDataTests
 
       def split_sql_statements(sql)
         statements = []
-        current_statement = ''
+        current_statement = +''
         in_string = false
         escaped = false
 
@@ -200,7 +202,7 @@ module RealDataTests
           elsif char == ';' && !in_string
             # Add the completed statement
             statements << current_statement.strip unless current_statement.strip.empty?
-            current_statement = ''
+            current_statement = +''
             next
           end
           escaped = false
@@ -259,7 +261,7 @@ module RealDataTests
       end
 
       def clean_complex_values(values_str)
-        current_value = ''
+        current_value = +''
         values = []
         in_quotes = false
         in_json = false
@@ -296,7 +298,7 @@ module RealDataTests
           when ','
             if !in_quotes && !in_json
               values << clean_value(current_value.strip)
-              current_value = ''
+              current_value = +''
             else
               current_value << char
             end
