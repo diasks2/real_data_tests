@@ -23,12 +23,9 @@ RSpec.configure do |config|
     begin
       ActiveRecord::Base.connection
     rescue ActiveRecord::NoDatabaseError
-      system('createdb real_data_tests_test')
-      ActiveRecord::Base.establish_connection(
-        adapter: 'postgresql',
-        database: 'real_data_tests_test',
-        host: 'localhost'
-      )
+      system("createdb #{ENV.fetch('PGDATABASE', 'real_data_tests_test')}")
+      ActiveRecord::Base.connection_pool.disconnect!
+      ActiveRecord::Base.connection
     end
 
     DatabaseCleaner.strategy = :transaction

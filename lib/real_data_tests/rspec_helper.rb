@@ -33,29 +33,11 @@ module RealDataTests
       end
     end
 
-    def load_real_test_data(name)
-      dump_path = File.join(RealDataTests.configuration.dump_path, "#{name}.sql")
-      raise Error, "Test data file not found: #{dump_path}" unless File.exist?(dump_path)
-      ActiveRecord::Base.transaction do
-        # Disable foreign key checks
-        ActiveRecord::Base.connection.execute('SET session_replication_role = replica;')
-        begin
-          # Load the SQL dump quietly
-          result = system("psql #{connection_options} -q < #{dump_path}")
-          raise Error, "Failed to load test data: #{dump_path}" unless result
-        ensure
-          # Re-enable foreign key checks
-          ActiveRecord::Base.connection.execute('SET session_replication_role = DEFAULT;')
-        end
-      end
-    end
-
     def load_real_test_data_native(name)
       dump_path = File.join(RealDataTests.configuration.dump_path, "#{name}.sql")
       raise Error, "Test data file not found: #{dump_path}" unless File.exist?(dump_path)
 
       sql_content = File.read(dump_path)
-      blocks = parse_sql_blocks(sql_content)
 
       ActiveRecord::Base.transaction do
         connection = ActiveRecord::Base.connection
@@ -64,8 +46,16 @@ module RealDataTests
         connection.execute('SET session_replication_role = replica;')
 
         begin
-          blocks.each_with_index do |block, index|
-            execute_block(block, index + 1, blocks.length)
+          if sql_content.match?(/^COPY .* FROM stdin/i)
+            blocks = parse_sql_blocks(sql_content)
+            blocks.each_with_index do |block, index|
+              execute_block(block, index + 1, blocks.length)
+            end
+          else
+            # No COPY blocks: send the whole dump in one round-trip. The
+            # server parses the multi-statement string, so semicolons inside
+            # string literals are handled correctly without client-side splitting.
+            connection.execute(sql_content)
           end
         ensure
           connection.execute('SET session_replication_role = DEFAULT;')
@@ -73,54 +63,11 @@ module RealDataTests
       end
     end
 
+    # Loads on the ActiveRecord connection so the data participates in the
+    # caller's transaction (e.g. DatabaseCleaner :transaction strategy).
+    alias_method :load_real_test_data, :load_real_test_data_native
+
     private
-
-    def connection_options
-      config = if ActiveRecord::Base.respond_to?(:connection_db_config)
-        ActiveRecord::Base.connection_db_config.configuration_hash
-      else
-        ActiveRecord::Base.connection_config
-      end
-      options = []
-      options << "-h #{config[:host]}" if config[:host]
-      options << "-p #{config[:port]}" if config[:port]
-      options << "-U #{config[:username]}" if config[:username]
-      options << "-d #{config[:database]}"
-      options << "-q"
-      options.join(" ")
-    end
-
-    class SqlBlock
-      attr_reader :type, :content, :table_name
-
-      def initialize(content)
-        @content = content.strip
-        @type = determine_block_type
-        @table_name = extract_table_name if @type == :insert
-      end
-
-      private
-
-      def determine_block_type
-        if @content.match?(/\AINSERT INTO/i)
-          :insert
-        elsif @content.match?(/\ACOPY.*FROM stdin/i)
-          :copy
-        elsif @content.match?(/\AALTER TABLE/i)
-          :alter
-        elsif @content.match?(/\ASET/i)
-          :set
-        else
-          :other
-        end
-      end
-
-      def extract_table_name
-        if @content =~ /INSERT INTO\s+"?([^\s"(]+)"?\s/i
-          $1
-        end
-      end
-    end
 
     def parse_sql_blocks(content)
       blocks = []
@@ -203,7 +150,16 @@ module RealDataTests
 
     def execute_copy_block(block, index, total)
       # puts "Executing COPY block #{index}/#{total}"
-      ActiveRecord::Base.connection.execute(block.content)
+      lines = block.content.lines.map(&:chomp)
+      copy_statement = lines.shift
+      data_lines = lines.take_while { |line| line != '\\.' }
+
+      # raw_connection is the same libpq session as the AR connection, so the
+      # COPY participates in the surrounding transaction.
+      raw = ActiveRecord::Base.connection.raw_connection
+      raw.copy_data(copy_statement) do
+        data_lines.each { |line| raw.put_copy_data("#{line}\n") }
+      end
     end
 
     def execute_regular_block(block, index, total)
