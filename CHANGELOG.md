@@ -1,7 +1,7 @@
 ## [Unreleased]
 ### Added
 - **Load strategies**: SQL dump loading is now pluggable via `RealDataTests::LoadStrategies`
-  - `LoadStrategies::Native` (default) — loads on the ActiveRecord connection
+  - `LoadStrategies::Native` — loads on the ActiveRecord connection (default only via `load_real_test_data_native`)
   - `LoadStrategies::Psql` — the previous `psql` shell-out behavior, for dumps that require psql itself (meta-commands like `\set`, or dumps too large to read into memory)
   - Inject via `load_real_test_data("dump", strategy: RealDataTests::LoadStrategies::Psql)`
   - Custom strategies: subclass `LoadStrategies::Base` and implement `#call(dump_path)`
