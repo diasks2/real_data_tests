@@ -4,6 +4,7 @@
   - `LoadStrategies::Native` (default) — loads on the ActiveRecord connection
   - `LoadStrategies::Psql` — the previous `psql` shell-out behavior, for dumps that require psql itself (meta-commands like `\set`, or dumps too large to read into memory)
   - Inject via `load_real_test_data("dump", strategy: RealDataTests::LoadStrategies::Psql)`
+  - Custom strategies: subclass `LoadStrategies::Base` and implement `#call(dump_path)`
 
 ### Changed
 - `load_real_test_data` now defaults to the `Native` strategy: it runs on the ActiveRecord connection, so loaded data participates in the caller's transaction (e.g. DatabaseCleaner `:transaction` strategy) and rolls back with it

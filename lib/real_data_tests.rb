@@ -7,6 +7,7 @@ require_relative 'real_data_tests/data_anonymizer'
 require_relative 'real_data_tests/engine' if defined?(Rails)
 require_relative 'real_data_tests/pg_dump_generator'
 require_relative 'real_data_tests/record_collector'
+require_relative 'real_data_tests/load_strategies/base'
 require_relative 'real_data_tests/load_strategies/native'
 require_relative 'real_data_tests/load_strategies/psql'
 require_relative 'real_data_tests/rspec_helper'

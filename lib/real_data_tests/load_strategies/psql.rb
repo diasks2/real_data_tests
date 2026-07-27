@@ -10,11 +10,7 @@ module RealDataTests
     # Use this only when the dump requires psql itself — e.g. psql
     # meta-commands (\set, \connect) or dumps too large to read into memory.
     # For everything else, prefer the (default) Native strategy.
-    class Psql
-      def self.call(dump_path)
-        new.call(dump_path)
-      end
-
+    class Psql < Base
       def call(dump_path)
         result = system("psql #{connection_options} -q < #{dump_path}")
         raise Error, "Failed to load test data: #{dump_path}" unless result

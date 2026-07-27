@@ -8,11 +8,7 @@ module RealDataTests
     # multi-statement execute (one server round-trip). Dumps containing COPY
     # blocks fall back to block-by-block execution, streaming COPY data
     # through raw_connection.copy_data on the same libpq session.
-    class Native
-      def self.call(dump_path)
-        new.call(dump_path)
-      end
-
+    class Native < Base
       def call(dump_path)
         sql_content = File.read(dump_path)
 
