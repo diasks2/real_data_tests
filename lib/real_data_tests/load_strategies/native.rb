@@ -322,12 +322,8 @@ module RealDataTests
         return value.downcase if ['true', 'false'].include?(value.downcase)
         return value if value.match?(/^\d+$/) # Numbers
 
-        if value.match?(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
-          "'#{value}'" # UUID
-        else
-          # Handle any other string value, including those with commas
-          "'#{value}'" # Other strings
-        end
+        # Quote everything else: UUIDs, strings with commas, etc.
+        "'#{value}'"
       end
     end
   end
