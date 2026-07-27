@@ -122,9 +122,20 @@ RSpec.describe RealDataTests::RSpecHelper, 'data loading' do
     include_examples 'a transactional loader', :load_real_test_data_native
   end
 
-  describe '#load_real_test_data' do
-    include_examples 'a transactional loader', :load_real_test_data
+  describe '#load_real_test_data with the Native strategy' do
+    let(:helper) do
+      base = Class.new { include RealDataTests::RSpecHelper }.new
+      wrapper = Object.new
+      wrapper.define_singleton_method(:load) do |name|
+        base.load_real_test_data(name, strategy: RealDataTests::LoadStrategies::Native)
+      end
+      wrapper
+    end
 
+    include_examples 'a transactional loader', :load
+  end
+
+  describe '#load_real_test_data' do
     it 'accepts a strategy via dependency injection' do
       write_fixture('insert_dump', INSERT_DUMP)
       helper.load_real_test_data('insert_dump', strategy: RealDataTests::LoadStrategies::Native)
@@ -165,6 +176,12 @@ RSpec.describe RealDataTests::RSpecHelper, 'data loading' do
     it 'loads the dump via psql, committing outside the caller transaction' do
       write_fixture('psql_dump', "INSERT INTO rdt_psql_records (id, name) VALUES ('1', 'Alpha');\n")
       helper.load_real_test_data('psql_dump', strategy: RealDataTests::LoadStrategies::Psql)
+      expect(psql('SELECT COUNT(*) FROM rdt_psql_records')).to eq('1')
+    end
+
+    it 'is the default strategy of load_real_test_data (backwards compatible)' do
+      write_fixture('psql_dump', "INSERT INTO rdt_psql_records (id, name) VALUES ('1', 'Alpha');\n")
+      helper.load_real_test_data('psql_dump')
       expect(psql('SELECT COUNT(*) FROM rdt_psql_records')).to eq('1')
     end
 

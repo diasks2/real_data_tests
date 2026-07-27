@@ -12,8 +12,18 @@ module RealDataTests
     # For everything else, prefer the (default) Native strategy.
     class Psql < Base
       def call(dump_path)
-        result = system("psql #{connection_options} -q < #{dump_path}")
-        raise Error, "Failed to load test data: #{dump_path}" unless result
+        ActiveRecord::Base.transaction do
+          # Disable foreign key checks
+          ActiveRecord::Base.connection.execute('SET session_replication_role = replica;')
+          begin
+            # Load the SQL dump quietly
+            result = system("psql #{connection_options} -q < #{dump_path}")
+            raise Error, "Failed to load test data: #{dump_path}" unless result
+          ensure
+            # Re-enable foreign key checks
+            ActiveRecord::Base.connection.execute('SET session_replication_role = DEFAULT;')
+          end
+        end
       end
 
       private
