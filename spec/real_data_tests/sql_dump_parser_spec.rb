@@ -1,10 +1,10 @@
 require 'spec_helper'
 
-RSpec.describe RealDataTests::RSpecHelper do
-  let(:helper) { Class.new { include RealDataTests::RSpecHelper }.new }
+RSpec.describe RealDataTests::SqlDumpParser do
+  let(:parser) { described_class }
 
   describe 'SqlBlock' do
-    let(:sql_block) { helper.send(:parse_sql_blocks, sql_content).first }
+    let(:sql_block) { parser.parse(sql_content).first }
 
     context 'with INSERT statements' do
       let(:sql_content) do
@@ -67,14 +67,14 @@ RSpec.describe RealDataTests::RSpecHelper do
       end
 
       it 'correctly splits multiple statements' do
-        blocks = helper.send(:parse_sql_blocks, sql_content)
+        blocks = parser.parse(sql_content)
         expect(blocks.length).to eq(2)
         expect(blocks[0].table_name).to eq('organizations')
         expect(blocks[1].table_name).to eq('users')
       end
 
       it 'preserves ON CONFLICT clauses for each statement' do
-        blocks = helper.send(:parse_sql_blocks, sql_content)
+        blocks = parser.parse(sql_content)
         blocks.each do |block|
           expect(block.content).to include('ON CONFLICT')
           expect(block.content).to include('DO NOTHING')

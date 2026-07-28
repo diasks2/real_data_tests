@@ -1,3 +1,17 @@
+## [Unreleased]
+### Added
+- **Load strategies**: SQL dump loading is now pluggable via `RealDataTests::LoadStrategies`
+  - `LoadStrategies::Native` — loads on the ActiveRecord connection (default only via `load_real_test_data_native`)
+  - `LoadStrategies::Psql` — the previous `psql` shell-out behavior, for dumps that require psql itself (meta-commands like `\set`, or dumps too large to read into memory)
+  - Inject via `load_real_test_data("dump", strategy: RealDataTests::LoadStrategies::Psql)`
+  - Custom strategies: subclass `LoadStrategies::Base` and implement `#call(dump_path)`
+
+### Changed
+- Reworked SQL dump loading around the new strategies
+  - `load_real_test_data` behavior is unchanged (psql shell-out, `LoadStrategies::Psql` default); pass `strategy: LoadStrategies::Native` to load transactionally on the ActiveRecord connection so data participates in the caller's transaction (e.g. DatabaseCleaner `:transaction` strategy) and rolls back with it
+  - Native loader: dumps without `COPY ... FROM stdin` blocks are executed as a single multi-statement `execute` (one server round-trip) instead of parsed and executed block-by-block; block parsing is kept only as the COPY fallback
+  - Native loader: `COPY ... FROM stdin` blocks are streamed through `raw_connection.copy_data` on the same libpq session, so COPY data is transactional too (previously broken — the whole COPY block went through `execute`)
+
 ## [0.4.1] - 2026-04-09
 ### Fixed
 - Fixed `datetime` microsecond precision loss in `PgDumpGenerator`
