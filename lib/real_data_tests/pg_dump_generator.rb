@@ -104,9 +104,14 @@ module RealDataTests
     end
 
     def collect_inserts(records)
+      connection = ActiveRecord::Base.connection
+
       records.map do |record|
-        table_name = record.class.table_name
+        # Quote identifiers so reserved words (e.g. a "default" column) and
+        # mixed-case names survive the round-trip through the loader.
+        quoted_table_name = connection.quote_table_name(record.class.table_name)
         columns = record.class.column_names
+        quoted_columns = columns.map { |column| connection.quote_column_name(column) }
 
         values = columns.map do |column|
           if record.class.respond_to?(:defined_enums) && record.class.defined_enums.key?(column)
@@ -118,8 +123,8 @@ module RealDataTests
         end
 
         <<~SQL.strip
-          INSERT INTO #{table_name}
-          (#{columns.join(', ')})
+          INSERT INTO #{quoted_table_name}
+          (#{quoted_columns.join(', ')})
           VALUES (#{values.join(', ')})
           ON CONFLICT (id) DO NOTHING;
         SQL

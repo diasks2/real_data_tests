@@ -93,8 +93,8 @@ RSpec.describe RealDataTests::PgDumpGenerator do
         sql = generator.generate
 
         # More specific expectations for the SQL statement
-        expect(sql).to include("INSERT INTO treatment_reports")
-        expect(sql).to include("(id, service_history_log_data)")
+        expect(sql).to include('INSERT INTO "treatment_reports"')
+        expect(sql).to include('("id", "service_history_log_data")')
         expect(sql).to include("VALUES (1, '{}')")
         expect(sql).to include("ON CONFLICT (id) DO NOTHING")
       end
@@ -160,6 +160,43 @@ RSpec.describe RealDataTests::PgDumpGenerator do
         sql = generator.generate
 
         expect(sql).to include('2026-01-15 10:30:45.123456 UTC')
+      end
+    end
+
+    context 'with identifiers that need quoting' do
+      let(:connection) { ActiveRecord::Base.connection }
+
+      # Mixed-case table name and reserved-word columns: each one is a syntax
+      # or "relation does not exist" error when written unquoted.
+      let(:model) do
+        Class.new(ActiveRecord::Base) do
+          self.table_name = 'BillingProviders'
+
+          def self.name
+            'BillingProvider'
+          end
+        end
+      end
+
+      before do
+        connection.execute(<<~SQL)
+          CREATE TABLE "BillingProviders" (
+            id bigint PRIMARY KEY,
+            name text,
+            "default" boolean NOT NULL DEFAULT false,
+            "order" integer
+          );
+        SQL
+      end
+
+      it 'generates a dump that loads' do
+        record = model.new(id: 1, name: 'Acme', default: true, order: 2)
+        sql = described_class.new([record]).generate
+
+        connection.execute(sql)
+
+        loaded = connection.select_one('SELECT name, "default", "order" FROM "BillingProviders" WHERE id = 1')
+        expect(loaded).to eq('name' => 'Acme', 'default' => true, 'order' => 2)
       end
     end
   end

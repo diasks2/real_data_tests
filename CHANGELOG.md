@@ -1,4 +1,10 @@
-## [Unreleased]
+## [0.5.1] - 2026-09-16
+### Fixed
+- `PgDumpGenerator` now quotes table and column names in generated `INSERT` statements
+  - Previously identifiers were written unquoted, so a reserved-word column (e.g. `default`, `order`, `user`) produced `PG::SyntaxError` on load, and mixed-case table names failed to resolve
+  - Identifiers are quoted with the connection's `quote_table_name` / `quote_column_name`; dumps generated before this fix load unchanged
+
+## [0.5.0] - 2026-07-28
 ### Added
 - **Load strategies**: SQL dump loading is now pluggable via `RealDataTests::LoadStrategies`
   - `LoadStrategies::Native` — loads on the ActiveRecord connection (default only via `load_real_test_data_native`)
